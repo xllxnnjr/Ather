@@ -1,0 +1,183 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true;
+    }
+
+    function isValidActivityStats(stats) {
+      return stats is map
+        && stats.keys().hasAll([
+          'artists',
+          'songs',
+          'totalMinutesListened',
+          'streakDays',
+          'lastActiveDateKey'
+        ])
+        && stats.keys().hasOnly([
+          'artists',
+          'songs',
+          'totalMinutesListened',
+          'streakDays',
+          'lastActiveDateKey'
+        ])
+        && stats.artists is map
+        && stats.artists.size() <= 500
+        && stats.songs is map
+        && stats.songs.size() <= 500
+        && (stats.totalMinutesListened is int || stats.totalMinutesListened is float)
+        && stats.totalMinutesListened >= 0
+        && stats.totalMinutesListened <= 10000000
+        && stats.streakDays is int
+        && stats.streakDays >= 0
+        && stats.streakDays <= 36500
+        && stats.lastActiveDateKey is string
+        && stats.lastActiveDateKey.size() <= 32;
+    }
+
+    function isValidSharedPlayback(sp) {
+      return sp is map
+        && sp.keys().size() <= 24
+        && (!('activeDeviceId' in sp) || sp.activeDeviceId == null || (sp.activeDeviceId is string && sp.activeDeviceId.size() <= 128))
+        && (!('activeDeviceName' in sp) || sp.activeDeviceName == null || (sp.activeDeviceName is string && sp.activeDeviceName.size() <= 120))
+        && (!('isPlaying' in sp) || sp.isPlaying is bool)
+        && (!('positionSec' in sp) || ((sp.positionSec is int || sp.positionSec is float) && sp.positionSec >= 0))
+        && (!('updatedAt' in sp) || (sp.updatedAt is int && sp.updatedAt >= 0));
+    }
+
+    function isValidAccountData(acc) {
+      return acc is map
+        && acc.keys().hasOnly([
+          'hasCompletedOnboarding',
+          'profile',
+          'userMusicProfile',
+          'playlists',
+          'deletedPlaylistIds',
+          'favorites',
+          'favoriteStates',
+          'aiSettings',
+          'preferences',
+          'eqState',
+          'recentIds',
+          'playHistory',
+          'recognitionHistory',
+          'recentSearches',
+          'historyClearedAt',
+          'sectionTimestamps',
+          'syncVersion',
+          'lastModifiedByDeviceId',
+          'updatedAt'
+        ])
+        && (!('hasCompletedOnboarding' in acc) || acc.hasCompletedOnboarding is bool)
+        && (!('updatedAt' in acc) || (acc.updatedAt is int && acc.updatedAt >= 0))
+        && (!('syncVersion' in acc) || (acc.syncVersion is int && acc.syncVersion >= 0))
+        && (!('historyClearedAt' in acc) || (acc.historyClearedAt is int && acc.historyClearedAt >= 0))
+        && (!('lastModifiedByDeviceId' in acc) || acc.lastModifiedByDeviceId == null || (acc.lastModifiedByDeviceId is string && acc.lastModifiedByDeviceId.size() <= 128))
+        && (!('profile' in acc) || (acc.profile is map && acc.profile.keys().size() <= 10))
+        && (!('userMusicProfile' in acc) || (acc.userMusicProfile is map && acc.userMusicProfile.keys().size() <= 15))
+        && (!('playlists' in acc) || (acc.playlists is list && acc.playlists.size() <= 60))
+        && (!('deletedPlaylistIds' in acc) || (acc.deletedPlaylistIds is map && acc.deletedPlaylistIds.keys().size() <= 200))
+        && (!('favorites' in acc) || (acc.favorites is list && acc.favorites.size() <= 400))
+        && (!('favoriteStates' in acc) || (acc.favoriteStates is map && acc.favoriteStates.keys().size() <= 400))
+        && (!('aiSettings' in acc) || (acc.aiSettings is map && acc.aiSettings.keys().size() <= 10))
+        && (!('preferences' in acc) || (acc.preferences is map && acc.preferences.keys().size() <= 25))
+        && (!('eqState' in acc) || (acc.eqState is map && acc.eqState.keys().size() <= 5))
+        && (!('recentIds' in acc) || (acc.recentIds is list && acc.recentIds.size() <= 20))
+        && (!('playHistory' in acc) || (acc.playHistory is list && acc.playHistory.size() <= 150))
+        && (!('recognitionHistory' in acc) || (acc.recognitionHistory is list && acc.recognitionHistory.size() <= 30))
+        && (!('recentSearches' in acc) || (acc.recentSearches is list && acc.recentSearches.size() <= 30))
+        && (!('sectionTimestamps' in acc) || (acc.sectionTimestamps is map && acc.sectionTimestamps.keys().size() <= 15));
+    }
+
+    function isValidLookPreferences(look) {
+      return look is map
+        && look.keys().hasAll(['glassOpacity', 'compactTiles', 'springMotion'])
+        && look.keys().hasOnly(['glassOpacity', 'compactTiles', 'springMotion'])
+        && (look.glassOpacity is int || look.glassOpacity is float)
+        && look.glassOpacity >= 0.5
+        && look.glassOpacity <= 1.0
+        && look.compactTiles is bool
+        && look.springMotion is bool;
+    }
+
+    function isValidUserDoc(data) {
+      return data is map
+        && data.keys().hasOnly(['activityStats', 'sharedPlayback', 'accountData', 'lookPreferences', 'updatedAt'])
+        && data.keys().hasAll(['updatedAt'])
+        && data.updatedAt is int
+        && data.updatedAt >= 0
+        && (!('activityStats' in data) || isValidActivityStats(data.activityStats))
+        && (!('sharedPlayback' in data) || isValidSharedPlayback(data.sharedPlayback))
+        && (!('accountData' in data) || isValidAccountData(data.accountData))
+        && (!('lookPreferences' in data) || isValidLookPreferences(data.lookPreferences));
+    }
+
+    function isValidDevice(data, userId, deviceId) {
+      return data is map
+        && data.keys().hasAll(['id', 'ownerId', 'name', 'type', 'isActive', 'lastSeenAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'type', 'platform', 'isActive', 'lastSeenAt'])
+        && data.id == deviceId
+        && data.ownerId == userId
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.type is string
+        && data.type.size() > 0
+        && data.type.size() <= 32
+        && (!('platform' in data) || (data.platform is string && data.platform.size() <= 64))
+        && data.isActive is bool
+        && data.lastSeenAt is int
+        && data.lastSeenAt >= 0;
+    }
+
+    match /users/{userId} {
+      allow get: if isVerifiedOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserDoc(incoming());
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserDoc(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['activityStats', 'sharedPlayback', 'accountData', 'lookPreferences', 'updatedAt']);
+      allow delete: if isVerifiedOwner(userId) && isValidId(userId);
+
+      match /devices/{deviceId} {
+        allow get: if isVerifiedOwner(userId) && isValidId(userId) && isValidId(deviceId);
+        allow list: if isVerifiedOwner(userId) && isValidId(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && isValidId(deviceId)
+          && isValidDevice(incoming(), userId, deviceId);
+        allow update: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && isValidId(deviceId)
+          && isValidDevice(incoming(), userId, deviceId);
+        allow delete: if isVerifiedOwner(userId) && isValidId(userId) && isValidId(deviceId);
+      }
+    }
+  }
+}

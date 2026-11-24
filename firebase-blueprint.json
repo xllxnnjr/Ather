@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "UserAccountDocument": {
+      "title": "User Account Document",
+      "description": "Stores isolated per-user activity stats, real-time cross-device cloud sync snapshot, look preferences, and playback handoff state.",
+      "type": "object",
+      "properties": {
+        "activityStats": {
+          "type": "object",
+          "description": "Aggregated listening statistics keyed by normalized artist and song identifiers."
+        },
+        "sharedPlayback": {
+          "type": "object",
+          "description": "Live active device playback state and remote transport commands."
+        },
+        "accountData": {
+          "type": "object",
+          "description": "Account-isolated onboarding state, profile, taste profile, playlists with tombstones, favorites with timestamps, EQ, AI settings, preferences, and playback history."
+        },
+        "lookPreferences": {
+          "type": "object",
+          "description": "Per-account UI look preferences (glassOpacity, compactTiles, springMotion)."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "description": "Unix epoch millisecond timestamp of the latest sync."
+        }
+      },
+      "required": ["updatedAt"]
+    },
+    "UserDeviceDocument": {
+      "title": "User Device Document",
+      "description": "Registered active device entry for cross-device handoff.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "platform": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "lastSeenAt": { "type": "integer" }
+      },
+      "required": ["id", "ownerId", "name", "type", "isActive", "lastSeenAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserAccountDocument"
+      },
+      "description": "Private user profile, stats, full cross-device synced account snapshot, and shared playback state isolated strictly to the authenticated verified user."
+    },
+    "/users/{userId}/devices/{deviceId}": {
+      "schema": {
+        "$ref": "#/entities/UserDeviceDocument"
+      },
+      "description": "Registered devices belonging to the authenticated user for cross-device playback handoff."
+    }
+  }
+}

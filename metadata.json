@@ -1,0 +1,8 @@
+{
+  "name": "Ather",
+  "description": "Pitch-black Liquid Glass music streaming experience fusing editorial discovery, Spatial Audio playback, and live time-synced lyrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
