@@ -36,7 +36,6 @@ import {
   AccountProvider,
   compressImageFileToDataUrl,
 } from '../../services/accountStorage';
-import { CloudSyncStatus } from '../../services/cloudSync';
 import { UserLookPreferences } from '../../services/userScope';
 import {
   AiDiscoveryLevel,
@@ -83,12 +82,12 @@ export const EQ_PRESET_VALUES: Record<Exclude<EqPreset, 'Custom'>, number[]> = {
 };
 
 const LANGUAGES = [
-  'English',
-  'Spanish',
-  'French',
-  'German',
-  'Japanese',
-  'Korean',
+  'english (us)',
+  'spanish',
+  'french',
+  'german',
+  'japanese',
+  'korean',
 ] as const;
 
 interface ProfileSettingsScreenProps {
@@ -170,10 +169,32 @@ interface ProfileSettingsScreenProps {
   onRefreshAiRecommendations: () => void;
   lookPrefs?: UserLookPreferences;
   onUpdateLookPrefs?: (patch: Partial<UserLookPreferences>) => void;
-  syncStatus?: CloudSyncStatus;
-  onSyncNow?: () => Promise<void> | void;
   accountDeviceCount?: number;
   onOpenDevices?: () => void;
+  wifiQuality?: QualityTier;
+  onChangeWifiQuality?: (tier: QualityTier) => void;
+  cellularQuality?: QualityTier;
+  onChangeCellularQuality?: (tier: QualityTier) => void;
+  downloadQuality?: QualityTier;
+  onChangeDownloadQuality?: (tier: QualityTier) => void;
+  losslessSpatial?: boolean;
+  onToggleLosslessSpatial?: () => void;
+  volumeNormalization?: boolean;
+  onToggleVolumeNormalization?: () => void;
+  monoAudio?: boolean;
+  onToggleMonoAudio?: () => void;
+  dataSaver?: boolean;
+  onToggleDataSaver?: () => void;
+  downloadOverCellular?: boolean;
+  onToggleDownloadOverCellular?: () => void;
+  language?: string;
+  onChangeLanguage?: (lang: string) => void;
+  notifyNewReleases?: boolean;
+  onToggleNotifyNewReleases?: () => void;
+  notifyMixUpdates?: boolean;
+  onToggleNotifyMixUpdates?: () => void;
+  notifyAppUpdates?: boolean;
+  onToggleNotifyAppUpdates?: () => void;
 }
 
 const ToggleSwitch: React.FC<{
@@ -187,12 +208,12 @@ const ToggleSwitch: React.FC<{
     aria-checked={checked}
     aria-label={label}
     onClick={onChange}
-    className={`relative w-12 h-7 rounded-full p-1 transition-colors shrink-0 ${
-      checked ? 'bg-white' : 'bg-white/15'
+    className={`relative w-12 h-7 rounded-full p-0.5 border transition-colors shrink-0 ${
+      checked ? 'bg-white border-white' : 'bg-[#141418] border-[#2A2A32]'
     }`}
   >
     <span
-      className={`block w-5 h-5 rounded-full transition-transform duration-200 ${
+      className={`block w-5 h-5 rounded-full border border-[#242429] transition-transform duration-200 ${
         checked ? 'translate-x-5 bg-black' : 'translate-x-0 bg-white'
       }`}
     />
@@ -279,20 +300,42 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
   onRefreshAiRecommendations,
   lookPrefs = { glassOpacity: 0.92, compactTiles: true, springMotion: true },
   onUpdateLookPrefs,
-  syncStatus,
-  onSyncNow,
   accountDeviceCount = 0,
   onOpenDevices,
+  wifiQuality: wifiQualityProp,
+  onChangeWifiQuality,
+  cellularQuality: cellularQualityProp,
+  onChangeCellularQuality,
+  downloadQuality: downloadQualityProp,
+  onChangeDownloadQuality,
+  losslessSpatial: losslessSpatialProp,
+  onToggleLosslessSpatial,
+  volumeNormalization: volumeNormalizationProp,
+  onToggleVolumeNormalization,
+  monoAudio: monoAudioProp,
+  onToggleMonoAudio,
+  dataSaver: dataSaverProp,
+  onToggleDataSaver,
+  downloadOverCellular: downloadOverCellularProp,
+  onToggleDownloadOverCellular,
+  language: languageProp,
+  onChangeLanguage,
+  notifyNewReleases: notifyNewReleasesProp,
+  onToggleNotifyNewReleases,
+  notifyMixUpdates: notifyMixUpdatesProp,
+  onToggleNotifyMixUpdates,
+  notifyAppUpdates: notifyAppUpdatesProp,
+  onToggleNotifyAppUpdates,
 }) => {
   const isGuest = accountProvider === 'guest';
   const providerLabel =
     accountProvider === 'google'
-      ? 'Google'
+      ? 'google'
       : accountProvider === 'apple'
-      ? 'Apple'
+      ? 'apple'
       : accountProvider === 'email'
-      ? 'Email'
-      : 'Guest';
+      ? 'email'
+      : 'guest';
 
   const [activePage, setActivePage] = useState<SettingsPageId>('hub');
   const topAnchorRef = useRef<HTMLDivElement>(null);
@@ -326,31 +369,88 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
     };
   }, []);
 
-  // Playback & Audio sub-page local controls
-  const [wifiQuality, setWifiQuality] = useState<QualityTier>('High');
-  const [cellularQuality, setCellularQuality] = useState<QualityTier>('Normal');
-  const [downloadQuality, setDownloadQuality] = useState<QualityTier>('High');
-  const [losslessSpatial, setLosslessSpatial] = useState(true);
+  // Playback & Audio sub-page controls (controlled by App.tsx with safe fallback)
+  const [localWifiQuality, setLocalWifiQuality] = useState<QualityTier>('High');
+  const [localCellularQuality, setLocalCellularQuality] = useState<QualityTier>('Normal');
+  const [localDownloadQuality, setLocalDownloadQuality] = useState<QualityTier>('High');
+  const [localLosslessSpatial, setLocalLosslessSpatial] = useState(true);
+  const [localVolumeNormalization, setLocalVolumeNormalization] = useState(true);
+  const [localMonoAudio, setLocalMonoAudio] = useState(false);
 
-  const [volumeNormalization, setVolumeNormalization] = useState(true);
-  const [monoAudio, setMonoAudio] = useState(false);
-
-  // Storage & Data local controls
-  const [dataSaver, setDataSaver] = useState(false);
-  const [downloadOverCellular, setDownloadOverCellular] = useState(false);
+  const [localDataSaver, setLocalDataSaver] = useState(false);
+  const [localDownloadOverCellular, setLocalDownloadOverCellular] = useState(false);
   const [cacheMb, setCacheMb] = useState(148);
   const [cacheClearedNotice, setCacheClearedNotice] = useState(false);
   const [downloadsClearedNotice, setDownloadsClearedNotice] = useState(false);
 
-  // Content & Privacy local controls
-  const [language, setLanguage] = useState<string>('English');
+  const [localLanguage, setLocalLanguage] = useState<string>('english (us)');
   const [historyClearedNotice, setHistoryClearedNotice] = useState(false);
 
-  // Notifications & Support local controls
-  const [notifyNewReleases, setNotifyNewReleases] = useState(true);
-  const [notifyMixUpdates, setNotifyMixUpdates] = useState(true);
-  const [notifyAppUpdates, setNotifyAppUpdates] = useState(true);
+  const [localNotifyNewReleases, setLocalNotifyNewReleases] = useState(true);
+  const [localNotifyMixUpdates, setLocalNotifyMixUpdates] = useState(true);
+  const [localNotifyAppUpdates, setLocalNotifyAppUpdates] = useState(false);
   const [loggedOutNotice, setLoggedOutNotice] = useState(false);
+
+  const wifiQuality = wifiQualityProp ?? localWifiQuality;
+  const setWifiQuality = (q: QualityTier) => {
+    if (onChangeWifiQuality) onChangeWifiQuality(q);
+    else setLocalWifiQuality(q);
+  };
+  const cellularQuality = cellularQualityProp ?? localCellularQuality;
+  const setCellularQuality = (q: QualityTier) => {
+    if (onChangeCellularQuality) onChangeCellularQuality(q);
+    else setLocalCellularQuality(q);
+  };
+  const downloadQuality = downloadQualityProp ?? localDownloadQuality;
+  const setDownloadQuality = (q: QualityTier) => {
+    if (onChangeDownloadQuality) onChangeDownloadQuality(q);
+    else setLocalDownloadQuality(q);
+  };
+  const losslessSpatial = losslessSpatialProp ?? localLosslessSpatial;
+  const toggleLosslessSpatial = () => {
+    if (onToggleLosslessSpatial) onToggleLosslessSpatial();
+    else setLocalLosslessSpatial((v) => !v);
+  };
+  const volumeNormalization = volumeNormalizationProp ?? localVolumeNormalization;
+  const toggleVolumeNormalization = () => {
+    if (onToggleVolumeNormalization) onToggleVolumeNormalization();
+    else setLocalVolumeNormalization((v) => !v);
+  };
+  const monoAudio = monoAudioProp ?? localMonoAudio;
+  const toggleMonoAudio = () => {
+    if (onToggleMonoAudio) onToggleMonoAudio();
+    else setLocalMonoAudio((v) => !v);
+  };
+  const dataSaver = dataSaverProp ?? localDataSaver;
+  const toggleDataSaver = () => {
+    if (onToggleDataSaver) onToggleDataSaver();
+    else setLocalDataSaver((v) => !v);
+  };
+  const downloadOverCellular = downloadOverCellularProp ?? localDownloadOverCellular;
+  const toggleDownloadOverCellular = () => {
+    if (onToggleDownloadOverCellular) onToggleDownloadOverCellular();
+    else setLocalDownloadOverCellular((v) => !v);
+  };
+  const language = languageProp ?? localLanguage;
+  const setLanguage = (lang: string) => {
+    if (onChangeLanguage) onChangeLanguage(lang);
+    else setLocalLanguage(lang);
+  };
+  const notifyNewReleases = notifyNewReleasesProp ?? localNotifyNewReleases;
+  const toggleNotifyNewReleases = () => {
+    if (onToggleNotifyNewReleases) onToggleNotifyNewReleases();
+    else setLocalNotifyNewReleases((v) => !v);
+  };
+  const notifyMixUpdates = notifyMixUpdatesProp ?? localNotifyMixUpdates;
+  const toggleNotifyMixUpdates = () => {
+    if (onToggleNotifyMixUpdates) onToggleNotifyMixUpdates();
+    else setLocalNotifyMixUpdates((v) => !v);
+  };
+  const notifyAppUpdates = notifyAppUpdatesProp ?? localNotifyAppUpdates;
+  const toggleNotifyAppUpdates = () => {
+    if (onToggleNotifyAppUpdates) onToggleNotifyAppUpdates();
+    else setLocalNotifyAppUpdates((v) => !v);
+  };
 
   // Device Access / Browser Permissions status
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
@@ -437,27 +537,27 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
   const cachePct = Math.min(100 - downloadsPct, Math.round((cacheMb / totalStorageMb) * 100));
 
   const sleepSummary = sleepTimerEndOfTrack
-    ? 'End of track'
+    ? 'end of track'
     : sleepTimerRemainingSeconds !== null && sleepTimerRemainingSeconds > 0
     ? formatTimerCountdown(sleepTimerRemainingSeconds)
-    : 'Off';
+    : 'off';
 
   const renderSubPageHeader = (title: string, subtitle: string) => (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-1">
       <button
         type="button"
         onClick={() => setActivePage('hub')}
-        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#111114] border border-white/15 text-xs font-bold text-white hover:border-white/35 active:scale-95 transition-all"
+        className="ather-depth-pill inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform min-h-[44px]"
       >
         <ChevronLeftGlyph className="w-4 h-4" />
-        <span>Settings</span>
+        <span>settings</span>
       </button>
 
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           {title}
         </h1>
-        <p className="text-xs sm:text-sm text-white/75 font-bold mt-1">{subtitle}</p>
+        <p className="text-xs sm:text-sm text-[#A1A1AA] font-bold mt-1">{subtitle}</p>
       </div>
     </div>
   );
@@ -472,18 +572,18 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       key={target}
       type="button"
       onClick={() => navigateTo(target)}
-      className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors text-left"
+      className="ather-depth-row rounded-2xl w-full flex items-center justify-between gap-3 px-4 py-3.5 transition-colors text-left min-h-[56px]"
     >
       <div className="flex items-center gap-3.5 min-w-0">
-        <span className="w-9 h-9 rounded-full bg-white/[0.07] border border-white/10 flex items-center justify-center text-white/85 shrink-0">
+        <span className="w-9 h-9 rounded-full bg-[#141418] border border-[#242429] flex items-center justify-center text-white shrink-0">
           {icon}
         </span>
         <div className="min-w-0">
           <div className="text-sm font-extrabold text-white truncate">{title}</div>
-          <div className="text-xs text-white/50 truncate mt-0.5">{summary}</div>
+          <div className="text-xs font-bold text-[#A1A1AA] truncate mt-0.5">{summary}</div>
         </div>
       </div>
-      <ChevronRightGlyph className="w-4 h-4 text-white/45 shrink-0" />
+      <ChevronRightGlyph className="w-4 h-4 text-[#A1A1AA] shrink-0" />
     </button>
   );
 
@@ -492,175 +592,99 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {/* MAIN SETTINGS HUB */}
       {activePage === 'hub' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Settings
-            </h1>
-            <span className="text-xs font-semibold text-white/50 tabular-nums">
-              {playlistCount} Playlists · {favoriteCount} Liked
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                settings
+              </h1>
+              <p className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                account, playback, offline storage &amp; preferences
+              </p>
+            </div>
+            <span className="ather-depth-pill px-3 py-1 rounded-full text-xs font-extrabold text-white tabular-nums shrink-0">
+              {playlistCount} playlists · {favoriteCount} liked
             </span>
           </div>
 
           {loggedOutNotice && (
-            <div className="rounded-3xl bg-white text-black px-5 py-4 flex items-center justify-between gap-4 shadow-xl">
+            <div className="rounded-3xl bg-white text-black border border-white px-5 py-4 flex items-center justify-between gap-4">
               <div>
-                <div className="text-sm font-extrabold">Signed out of ATHER</div>
-                <div className="text-xs text-black/65 mt-0.5">
-                  Tap Sign Back In to continue listening as {displayName}.
+                <div className="text-sm font-extrabold">signed out of Ather</div>
+                <div className="text-xs font-bold text-black/75 mt-0.5">
+                  tap sign back in to continue listening as {displayName.toLowerCase()}.
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setLoggedOutNotice(false)}
-                className="px-4 py-2 rounded-full bg-black text-white text-xs font-extrabold shrink-0 hover:opacity-90 active:scale-95 transition-all"
+                className="px-4 py-2 rounded-full bg-black text-white border border-black text-xs font-extrabold shrink-0 hover:opacity-90 active:scale-95 transition-transform"
               >
-                Sign Back In
+                sign back in
               </button>
             </div>
           )}
 
           {/* GROUP 1: ACCOUNT */}
-          <section aria-label="Account" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              Account
+          <section aria-label="account" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              account
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               <button
                 type="button"
                 onClick={() => navigateTo('profile')}
-                className="w-full flex items-center justify-between gap-4 p-4 sm:p-5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors text-left"
+                className="ather-depth-row rounded-2xl w-full flex items-center justify-between gap-4 p-4 transition-colors text-left"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <ProfileAvatar
                     displayName={displayName}
                     imageUrl={profileImageUrl}
                     preset={avatarPreset}
-                    className="w-13 h-13 border border-white/25 shrink-0 shadow-md"
+                    className="w-13 h-13 border border-[#242429] shrink-0"
                   />
                   <div className="min-w-0">
                     <div className="text-base font-extrabold text-white truncate">
-                      {displayName}
+                      {displayName.toLowerCase()}
                     </div>
-                    <div className="text-xs text-white/75 font-bold truncate mt-0.5">
+                    <div className="text-xs text-[#A1A1AA] font-bold truncate mt-0.5">
                       {isGuest
-                        ? 'Guest session · Edit name & photo'
-                        : `${authEmail || email || 'Local profile'} · Edit photo & profile`}
+                        ? 'guest session · edit name & photo'
+                        : `${(authEmail || email || 'local profile').toLowerCase()} · edit photo & profile`}
                     </div>
                   </div>
                 </div>
-                <ChevronRightGlyph className="w-4 h-4 text-white/45 shrink-0" />
+                <ChevronRightGlyph className="w-4 h-4 text-[#A1A1AA] shrink-0" />
               </button>
-
-              {(onSignInGoogle || onSignOutGoogle) && (
-                <div className="px-4 sm:px-5 py-3.5 space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-white">
-                          {authUid ? 'Google Cloud Sync' : 'Cloud Account Sync'}
-                        </span>
-                        {authUid && syncStatus && (
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              syncStatus.phase === 'syncing'
-                                ? 'bg-white text-black border-white'
-                                : syncStatus.phase === 'retrying'
-                                ? 'bg-white/15 text-white border-white/40'
-                                : syncStatus.phase === 'offline'
-                                ? 'bg-black text-white/75 border-white/25'
-                                : 'bg-white/10 text-white/90 border-white/20'
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                syncStatus.phase === 'syncing'
-                                  ? 'bg-black animate-pulse'
-                                  : syncStatus.phase === 'synced'
-                                  ? 'bg-white'
-                                  : 'bg-white/55'
-                              }`}
-                            />
-                            <span>{syncStatus.label}</span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-white/50 truncate mt-0.5">
-                        {authUid
-                          ? syncStatus?.errorMessage
-                            ? syncStatus.errorMessage
-                            : syncStatus?.lastSyncedAt
-                            ? `${authEmail || 'Google account'} · Last synced ${new Date(
-                                syncStatus.lastSyncedAt
-                              ).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}`
-                            : `Syncing profile, library & playback for ${authEmail || 'your account'}`
-                          : 'Sign in with Google to sync across Android, iOS & Web'}
-                      </div>
-                    </div>
-                    {authUid ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {onSyncNow && (
-                          <button
-                            type="button"
-                            disabled={syncStatus?.phase === 'syncing'}
-                            onClick={() => void onSyncNow()}
-                            className="px-3 py-1.5 rounded-full bg-white text-black text-[11px] font-extrabold hover:bg-white/90 active:scale-95 transition-all disabled:opacity-50"
-                          >
-                            {syncStatus?.phase === 'syncing' ? 'Syncing' : 'Sync Now'}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void onSignOutGoogle?.()}
-                          className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold transition-colors"
-                        >
-                          Disconnect
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void onSignInGoogle?.()}
-                        className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all shrink-0"
-                      >
-                        Sign In
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {onOpenDevices && (
                 <button
                   type="button"
                   onClick={onOpenDevices}
-                  className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors text-left"
+                  className="ather-depth-row rounded-2xl w-full flex items-center justify-between gap-3 px-4 py-3.5 transition-colors text-left min-h-[52px]"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-8 h-8 rounded-full bg-white/[0.08] text-white flex items-center justify-center shrink-0">
+                    <span className="w-8 h-8 rounded-full bg-[#141418] border border-[#242429] text-white flex items-center justify-center shrink-0">
                       <DevicesGlyph className="w-4 h-4" />
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">
-                          Account Devices
+                        <span className="text-xs font-extrabold text-white">
+                          active devices
                         </span>
                         {authUid && (
-                          <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-[10px] font-bold text-white/85 tabular-nums">
-                            {accountDeviceCount} synced
+                          <span className="text-[11px] font-extrabold text-[#A1A1AA] tabular-nums">
+                            · {accountDeviceCount} active
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-white/50 truncate mt-0.5">
+                      <div className="text-[11px] font-bold text-[#A1A1AA] truncate mt-0.5">
                         {authUid
-                          ? 'View active devices, transfer playback & manage handoff'
-                          : 'Sign in with Google to see connected Android & Web devices'}
+                          ? 'view active devices and choose where to play'
+                          : 'sign in with google to see connected android & web devices'}
                       </div>
                     </div>
                   </div>
-                  <ChevronRightGlyph className="w-4 h-4 text-white/45 shrink-0" />
+                  <ChevronRightGlyph className="w-4 h-4 text-[#A1A1AA] shrink-0" />
                 </button>
               )}
 
@@ -668,22 +692,22 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                 <button
                   type="button"
                   onClick={onResetOnboarding}
-                  className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors text-left"
+                  className="ather-depth-row rounded-2xl w-full flex items-center justify-between gap-3 px-4 py-3.5 transition-colors text-left min-h-[52px]"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-8 h-8 rounded-full bg-white/[0.08] text-white flex items-center justify-center shrink-0">
+                    <span className="w-8 h-8 rounded-full bg-[#141418] border border-[#242429] text-white flex items-center justify-center shrink-0">
                       <RotateGlyph className="w-4 h-4" />
                     </span>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-white">
-                        Reset Onboarding
+                      <div className="text-xs font-extrabold text-white">
+                        reset onboarding
                       </div>
-                      <div className="text-[11px] font-bold text-white/75 truncate mt-0.5">
-                        Re-run the 6-step setup for this {providerLabel} account
+                      <div className="text-[11px] font-bold text-[#A1A1AA] truncate mt-0.5">
+                        re-run the setup for this {providerLabel} account
                       </div>
                     </div>
                   </div>
-                  <ChevronRightGlyph className="w-4 h-4 text-white/45 shrink-0" />
+                  <ChevronRightGlyph className="w-4 h-4 text-[#A1A1AA] shrink-0" />
                 </button>
               )}
 
@@ -691,166 +715,166 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => void onSwitchAccount()}
-                  className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors text-left"
+                  className="ather-depth-row rounded-2xl w-full flex items-center justify-between gap-3 px-4 py-3.5 transition-colors text-left min-h-[52px]"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-8 h-8 rounded-full bg-white/[0.08] text-white flex items-center justify-center shrink-0">
+                    <span className="w-8 h-8 rounded-full bg-[#141418] border border-[#242429] text-white flex items-center justify-center shrink-0">
                       <UserGlyph className="w-4 h-4" />
                     </span>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-white">
-                        Switch Account
+                      <div className="text-xs font-extrabold text-white">
+                        switch account
                       </div>
-                      <div className="text-[11px] text-white/50 truncate mt-0.5">
-                        Sign in or switch listener profile without losing data
+                      <div className="text-[11px] font-bold text-[#A1A1AA] truncate mt-0.5">
+                        sign in or switch listener profile without losing data
                       </div>
                     </div>
                   </div>
-                  <ChevronRightGlyph className="w-4 h-4 text-white/45 shrink-0" />
+                  <ChevronRightGlyph className="w-4 h-4 text-[#A1A1AA] shrink-0" />
                 </button>
               )}
             </div>
           </section>
 
           {/* GROUP 2: AI & SMART PLAYBACK */}
-          <section aria-label="AI and Smart Playback" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              AI &amp; Smart Playback
+          <section aria-label="ai and smart playback" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              ai &amp; smart playback
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <AiSparklesGlyph className="w-4 h-4" active={aiSmartShuffleEnabled || aiRecommendationsEnabled} />,
-                'AI Smart Shuffle & Recommendations',
-                `Smart Shuffle ${aiSmartShuffleEnabled ? 'On' : 'Off'} · Recommendations ${aiRecommendationsEnabled ? 'On' : 'Off'} · ${aiDiscoveryLevel}`,
+                'ai smart shuffle & recommendations',
+                `smart shuffle ${aiSmartShuffleEnabled ? 'on' : 'off'} · recommendations ${aiRecommendationsEnabled ? 'on' : 'off'} · ${aiDiscoveryLevel.toLowerCase()}`,
                 'ai'
               )}
             </div>
           </section>
 
           {/* GROUP 3: PLAYBACK & SOUND */}
-          <section aria-label="Playback and Sound" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              Playback &amp; Sound
+          <section aria-label="playback and sound" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              playback &amp; sound
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <EqSlidersGlyph className="w-4 h-4" />,
-                'Equalizer',
-                `Preset: ${eqPreset} (${eqBands.map((b) => (b > 0 ? `+${b}` : b)).join(' / ')} dB)`,
+                'equalizer',
+                `preset: ${eqPreset.toLowerCase()} (${eqBands.map((b) => (b > 0 ? `+${b}` : b)).join(' / ')} db)`,
                 'equalizer'
               )}
               {renderHubRow(
                 <WifiAudioGlyph className="w-4 h-4" />,
-                'Audio Quality',
-                `Wi-Fi: ${wifiQuality} · Cellular: ${dataSaver ? 'Low' : cellularQuality} · Downloads: ${downloadQuality}`,
+                'audio quality',
+                `wi-fi: ${wifiQuality.toLowerCase()} · cellular: ${(dataSaver ? 'Low' : cellularQuality).toLowerCase()} · downloads: ${downloadQuality.toLowerCase()}`,
                 'audio-quality'
               )}
               {renderHubRow(
                 <DiscGlyph className="w-4 h-4" />,
-                'Playback Behavior',
-                `Crossfade ${crossfadeSeconds === 0 ? 'Off' : `${crossfadeSeconds}s`} · Gapless ${gaplessPlayback ? 'On' : 'Off'} · Autoplay ${autoplay ? 'On' : 'Off'}`,
+                'playback behavior',
+                `crossfade ${crossfadeSeconds === 0 ? 'off' : `${crossfadeSeconds}s`} · gapless ${gaplessPlayback ? 'on' : 'off'} · autoplay ${autoplay ? 'on' : 'off'}`,
                 'playback'
               )}
               {renderHubRow(
                 <ClockGlyph className="w-4 h-4" />,
-                'Sleep Timer',
-                sleepSummary === 'Off'
-                  ? 'Off · Automatically pause playback'
-                  : `Active: ${sleepSummary}`,
+                'sleep timer',
+                sleepSummary === 'off'
+                  ? 'off · automatically pause playback'
+                  : `active: ${sleepSummary}`,
                 'sleep-timer'
               )}
             </div>
           </section>
 
           {/* GROUP 3: REELS & INTERFACE */}
-          <section aria-label="Reels and Interface" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              Reels &amp; Interface
+          <section aria-label="reels and interface" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              reels &amp; interface
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <ReelsFilmGlyph className="w-4 h-4" />,
-                'Music Reels',
-                `${reelsAutoScroll ? 'Auto-scroll' : 'Manual loop'} · ${reelsDurationSeconds}s clips`,
+                'music reels',
+                `${reelsAutoScroll ? 'auto-scroll' : 'manual loop'} · ${reelsDurationSeconds}s clips`,
                 'reels'
               )}
               {renderHubRow(
                 <HapticsSparkGlyph className="w-4 h-4" />,
-                'Haptics & Player UI',
-                `Visual pulses ${hapticsEnabled ? 'On' : 'Off'} · Mini-player swipe ${miniSwipeEnabled ? 'On' : 'Off'}`,
+                'haptics & player ui',
+                `visual pulses ${hapticsEnabled ? 'on' : 'off'} · mini-player swipe ${miniSwipeEnabled ? 'on' : 'off'}`,
                 'interface'
               )}
             </div>
           </section>
 
           {/* GROUP 4: STORAGE & DATA */}
-          <section aria-label="Storage and Data" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              Storage &amp; Data
+          <section aria-label="storage and data" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              storage &amp; data
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <DownloadGlyph className="w-4 h-4" />,
-                'Offline Mode & Downloads',
-                `${isOffline ? 'Offline Mode Active' : 'Online'} · ${downloadOverCellular ? 'Wi-Fi & Cellular' : 'Wi-Fi only'}`,
+                'offline mode & downloads',
+                `${isOffline ? 'offline mode active' : 'online'} · ${downloadOverCellular ? 'wi-fi & cellular' : 'wi-fi only'}`,
                 'data-downloads'
               )}
               {renderHubRow(
                 <StorageDriveGlyph className="w-4 h-4" />,
-                'Storage & Cache',
-                `${usedMb} MB of 1 GB used · ${downloadedCount} offline songs`,
+                'storage & cache',
+                `${usedMb} mb of 1 gb used · ${downloadedCount} offline songs`,
                 'storage'
               )}
             </div>
           </section>
 
           {/* GROUP 4.5: ALLOW ACCESS */}
-          <section aria-label="Allow Access" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/70">
-              Allow Access
+          <section aria-label="allow access" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              allow access
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <ExplicitShieldGlyph className="w-4 h-4" />,
-                'Allow Access & Permissions',
-                `Notifications: ${notifPermission === 'granted' ? 'Allowed' : 'Off'} · Persistent Storage: ${storagePersisted ? 'Granted' : 'Standard'}`,
+                'allow access & permissions',
+                `notifications: ${notifPermission === 'granted' ? 'allowed' : 'off'} · persistent storage: ${storagePersisted ? 'granted' : 'standard'}`,
                 'permissions'
               )}
             </div>
           </section>
 
           {/* GROUP 5: CONTENT, PRIVACY & SUPPORT */}
-          <section aria-label="Content, Privacy and Support" className="space-y-2">
-            <h2 className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-              Content, Privacy &amp; Support
+          <section aria-label="content, privacy and support" className="space-y-2.5">
+            <h2 className="px-2 text-xs font-extrabold tracking-[0.06em] text-[#A1A1AA]">
+              content, privacy &amp; support
             </h2>
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {renderHubRow(
                 <GlobeGlyph className="w-4 h-4" />,
-                'Content & Lyrics',
-                `${language} · Lyrics ${showLyricsEnabled ? 'On' : 'Off'} · Explicit ${explicitAllowed ? 'Allowed' : 'Blocked'}`,
+                'content & lyrics',
+                `${language.toLowerCase()} · lyrics ${showLyricsEnabled ? 'on' : 'off'} · explicit ${explicitAllowed ? 'allowed' : 'blocked'}`,
                 'content'
               )}
               {renderHubRow(
                 <ActivityGlyph className="w-4 h-4" />,
-                'Listening Activity & Privacy',
+                'listening activity & privacy',
                 privateSession
-                  ? 'Private session active'
+                  ? 'private session active'
                   : trackActivity
-                  ? `Recording activity (${recentCount} recent)`
-                  : 'Activity recording paused',
+                  ? `recording activity (${recentCount} recent)`
+                  : 'activity recording paused',
                 'privacy'
               )}
               {renderHubRow(
                 <BellGlyph className="w-4 h-4" />,
-                'Notifications',
-                `New Releases ${notifyNewReleases ? 'On' : 'Off'} · App Updates ${notifyAppUpdates ? 'On' : 'Off'}`,
+                'notifications',
+                `new releases ${notifyNewReleases ? 'on' : 'off'} · app updates ${notifyAppUpdates ? 'on' : 'off'}`,
                 'notifications'
               )}
               {renderHubRow(
                 <HelpGlyph className="w-4 h-4" />,
-                'Help & About',
-                'Help Center, Terms & Privacy Policy',
+                'help & about',
+                'help center, terms & privacy policy',
                 'help'
               )}
             </div>
@@ -868,10 +892,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   setLoggedOutNotice(true);
                 }
               }}
-              className="w-full rounded-full bg-white text-black py-3.5 px-6 flex items-center justify-center gap-2 text-sm font-extrabold shadow-[0_12px_30px_rgba(255,255,255,0.16)] hover:bg-white/90 active:scale-[0.99] transition-all"
+              className="ather-depth-btn w-full rounded-full py-3.5 px-6 flex items-center justify-center gap-2 text-sm font-extrabold text-white active:scale-[0.99] transition-transform min-h-[44px]"
             >
-              <LogoutGlyph className="w-4 h-4 text-[#DC2626]" />
-              <span className="text-[#DC2626]">Log Out</span>
+              <LogoutGlyph className="w-4 h-4 text-white" />
+              <span>log out</span>
             </button>
           </div>
         </>
@@ -881,17 +905,17 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'profile' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Profile & Photo',
+            'profile & photo',
             isGuest
-              ? 'Update your display name and profile picture on this device.'
-              : 'Update your display name, email, and profile picture across ATHER.'
+              ? 'update your display name and profile picture on this device.'
+              : 'update your display name, email, and profile picture across Ather.'
           )}
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
               onUpdateProfile(
-                draftName.trim() || (isGuest ? 'Guest Listener' : 'Listener'),
+                draftName.trim() || (isGuest ? 'guest listener' : 'listener'),
                 isGuest ? '' : draftEmail.trim(),
                 draftImageUrl,
                 draftPreset
@@ -901,29 +925,29 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
             className="space-y-5"
           >
             {/* Avatar Editing Card */}
-            <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 sm:p-6 space-y-5">
+            <div className="ather-depth-card rounded-3xl p-5 sm:p-6 space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center gap-5">
                 <div className="relative self-start">
                   <ProfileAvatar
                     displayName={draftName || displayName}
                     imageUrl={draftImageUrl}
                     preset={draftPreset}
-                    className="w-24 h-24 border-2 border-white/25 shadow-xl"
+                    className="w-24 h-24 border border-[#242429]"
                   />
                   <button
                     type="button"
-                    aria-label="Upload profile photo"
+                    aria-label="upload profile photo"
                     onClick={() => photoInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-white text-black flex items-center justify-center border-2 border-[#141416] shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                    className="ather-acid-btn absolute -bottom-1 -right-1 w-9 h-9 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
                   >
                     <CameraGlyph className="w-4 h-4" />
                   </button>
                 </div>
 
                 <div className="space-y-2.5 flex-1">
-                  <div className="text-sm font-extrabold text-white">Profile Picture</div>
-                  <p className="text-xs text-white/75 font-bold leading-relaxed">
-                    Upload a custom photo or choose one of the monochrome studio avatars below.
+                  <div className="text-sm font-extrabold text-white">profile picture</div>
+                  <p className="text-xs text-[#A1A1AA] font-bold leading-relaxed">
+                    upload a custom photo or choose one of the studio avatars below.
                   </p>
 
                   <input
@@ -941,29 +965,29 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => photoInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+                      className="ather-acid-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
                     >
                       <ImagePlusGlyph className="w-3.5 h-3.5" />
-                      <span>Upload Photo</span>
+                      <span>upload photo</span>
                     </button>
 
                     {draftImageUrl && (
                       <button
                         type="button"
                         onClick={() => setDraftImageUrl(null)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-colors"
+                        className="ather-depth-pill inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-white text-xs font-bold transition-colors"
                       >
                         <RotateGlyph className="w-3.5 h-3.5" />
-                        <span>Remove Photo</span>
+                        <span>remove photo</span>
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-white/[0.08] space-y-2.5">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-                  Studio Avatar Presets
+              <div className="pt-3 border-t border-[#242429] space-y-2.5">
+                <div className="text-xs font-extrabold tracking-wider text-[#A1A1AA]">
+                  studio avatar presets
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5">
                   {AVATAR_PRESETS.map((p) => {
@@ -976,19 +1000,19 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                           setDraftImageUrl(null);
                           setDraftPreset(p.id);
                         }}
-                        className={`flex flex-col items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-2xl border transition-all ${
+                        className={`flex flex-col items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-2xl border transition-colors ${
                           selected
-                            ? 'bg-white/10 border-white text-white'
-                            : 'bg-black/60 border-white/10 text-white/60 hover:border-white/30 hover:text-white'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                         }`}
                       >
                         <ProfileAvatar
                           displayName={draftName || displayName}
                           preset={p.id}
-                          className="w-9 h-9 sm:w-10 sm:h-10 border border-white/15"
+                          className="w-9 h-9 sm:w-10 sm:h-10 border border-[#242429]"
                         />
-                        <span className="text-[10px] sm:text-[11px] font-bold truncate max-w-full">
-                          {p.label}
+                        <span className="text-[10px] sm:text-[11px] font-extrabold truncate max-w-full">
+                          {p.label.toLowerCase()}
                         </span>
                       </button>
                     );
@@ -998,35 +1022,35 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
             </div>
 
             {/* Name & Account Identity Fields */}
-            <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 sm:p-6 space-y-4">
+            <div className="ather-depth-card rounded-3xl p-5 sm:p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-white/75 flex items-center gap-1.5">
-                  <UserGlyph className="w-3.5 h-3.5" />
-                  <span>Display Name</span>
+                <label className="text-xs font-extrabold text-[#A1A1AA] flex items-center gap-1.5">
+                  <UserGlyph className="w-3.5 h-3.5 text-white" />
+                  <span>display name</span>
                 </label>
                 <input
                   type="text"
                   autoComplete="off"
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
-                  placeholder="Enter display name"
-                  className="w-full rounded-2xl bg-black border border-white/15 px-4 py-3 text-base sm:text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                  placeholder="enter display name"
+                  className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-3 text-base sm:text-sm font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                 />
               </div>
 
               {isGuest ? (
-                <div className="rounded-2xl bg-black/75 border border-white/10 px-4 py-3 space-y-1">
-                  <div className="text-xs font-bold text-white/85">
-                    Guest Account — No email linked
+                <div className="ather-depth-row rounded-2xl px-4 py-3 space-y-1">
+                  <div className="text-xs font-extrabold text-white">
+                    guest account — no email linked
                   </div>
-                  <p className="text-[11px] text-white/50 leading-relaxed">
-                    Guest sessions stay strictly on this device. Use Switch Account or Cloud Account Sync to sign in with Google or an email address.
+                  <p className="text-[11px] font-bold text-[#A1A1AA] leading-relaxed">
+                    guest sessions stay strictly on this device. use switch account to sign in with google or an email address.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white/75">
-                    Email Address
+                  <label className="text-xs font-extrabold text-[#A1A1AA]">
+                    email address
                   </label>
                   <input
                     type="email"
@@ -1036,21 +1060,21 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     spellCheck={false}
                     value={draftEmail}
                     onChange={(e) => setDraftEmail(e.target.value)}
-                    placeholder="Enter email address"
-                    className="w-full rounded-2xl bg-black border border-white/15 px-4 py-3 text-base sm:text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                    placeholder="enter email address"
+                    className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-3 text-base sm:text-sm font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                   />
                 </div>
               )}
 
               <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-xs font-semibold text-white/70">
-                  {profileSavedNotice ? 'Profile changes saved.' : ''}
+                <span className="text-xs font-bold text-white">
+                  {profileSavedNotice ? 'profile changes saved.' : ''}
                 </span>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+                  className="ather-acid-btn px-6 py-2.5 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
                 >
-                  Save Profile
+                  save profile
                 </button>
               </div>
             </div>
@@ -1062,37 +1086,37 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'audio-quality' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Audio Quality',
-            'Choose bitrate and lossless streaming tiers across connections.'
+            'audio quality',
+            'choose bitrate and lossless streaming tiers across connections.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
             {[
               {
-                label: 'Wi-Fi Streaming',
-                desc: 'Maximum clarity on home and studio networks',
+                label: 'wi-fi streaming',
+                desc: 'maximum clarity on home and studio networks',
                 value: wifiQuality,
                 setter: setWifiQuality,
               },
               {
-                label: 'Cellular Streaming',
+                label: 'cellular streaming',
                 desc: dataSaver
-                  ? 'Overridden to Low while Data Saver is active'
-                  : 'Streaming quality over 4G / 5G',
+                  ? 'overridden to low while data saver is active'
+                  : 'streaming quality over 4g / 5g',
                 value: dataSaver ? ('Low' as QualityTier) : cellularQuality,
                 setter: setCellularQuality,
               },
               {
-                label: 'Offline Downloads',
-                desc: 'Audio quality saved to device storage',
+                label: 'offline downloads',
+                desc: 'audio quality saved to device storage',
                 value: downloadQuality,
                 setter: setDownloadQuality,
               },
             ].map((row) => (
-              <div key={row.label} className="p-4 sm:p-5 space-y-3">
+              <div key={row.label} className="ather-depth-row rounded-2xl p-4 space-y-3">
                 <div>
                   <div className="text-sm font-extrabold text-white">{row.label}</div>
-                  <div className="text-xs text-white/50 mt-0.5">{row.desc}</div>
+                  <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">{row.desc}</div>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   {(['Low', 'Normal', 'High'] as const).map((tier) => {
@@ -1102,23 +1126,23 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                         key={tier}
                         type="button"
                         onClick={() => row.setter(tier)}
-                        className={`py-2.5 px-2 sm:px-3 rounded-2xl border text-center transition-all ${
+                        className={`py-2.5 px-2 sm:px-3 rounded-2xl border text-center transition-colors ${
                           active
                             ? 'bg-white text-black border-white font-extrabold'
-                            : 'bg-black text-white/75 border-white/15 font-bold hover:border-white/35'
+                            : 'bg-[#141418] text-[#A1A1AA] border-[#242429] font-bold hover:text-white'
                         }`}
                       >
-                        <div className="text-xs">{tier}</div>
+                        <div className="text-xs">{tier.toLowerCase()}</div>
                         <div
-                          className={`text-[9.5px] sm:text-[10px] mt-0.5 truncate ${
-                            active ? 'text-black/65' : 'text-white/45'
+                          className={`text-[9.5px] sm:text-[10px] font-bold mt-0.5 truncate ${
+                            active ? 'text-black/75' : 'text-[#A1A1AA]'
                           }`}
                         >
                           {tier === 'Low'
                             ? '96 kbps'
                             : tier === 'Normal'
                             ? '160 kbps'
-                            : '24-bit Lossless'}
+                            : '24-bit lossless'}
                         </div>
                       </button>
                     );
@@ -1127,19 +1151,19 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
               </div>
             ))}
 
-            <div className="p-4 sm:p-5 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl p-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Spatial &amp; Hi-Res Output
+                  spatial &amp; hi-res output
                 </div>
-                <div className="text-xs text-white/50 mt-0.5">
-                  Preserve uncompressed studio stereo imaging when available
+                <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                  preserve uncompressed studio stereo imaging when available
                 </div>
               </div>
               <ToggleSwitch
                 checked={losslessSpatial}
-                onChange={() => setLosslessSpatial((v) => !v)}
-                label="Spatial and Hi-Res Output"
+                onChange={toggleLosslessSpatial}
+                label="spatial and hi-res output"
               />
             </div>
           </div>
@@ -1150,54 +1174,54 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'ai' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'AI & Smart Playback',
-            'Control Gemini-powered queue sequencing and personalized Home recommendations.'
+            'ai & smart playback',
+            'control smart queue sequencing and personalized home recommendations.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-full bg-[#141418] border border-[#242429] text-white flex items-center justify-center shrink-0">
                   <ShuffleGlyph className="w-4 h-4" />
                 </span>
                 <div>
-                  <div className="text-sm font-extrabold text-white">AI Smart Shuffle</div>
-                  <div className="text-xs text-white/50">
-                    Intelligently sequence your queue for seamless mood and tempo flow when Shuffle is enabled
+                  <div className="text-sm font-extrabold text-white">ai smart shuffle</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    intelligently sequence your queue for seamless mood and tempo flow when shuffle is enabled
                   </div>
                 </div>
               </div>
               <ToggleSwitch
                 checked={aiSmartShuffleEnabled}
                 onChange={onToggleAiSmartShuffle}
-                label="AI Smart Shuffle"
+                label="ai smart shuffle"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-full bg-[#141418] border border-[#242429] text-white flex items-center justify-center shrink-0">
                   <AiSparklesGlyph className="w-4 h-4" active={aiRecommendationsEnabled} />
                 </span>
                 <div>
-                  <div className="text-sm font-extrabold text-white">AI Recommendations</div>
-                  <div className="text-xs text-white/50">
-                    Display personalized AI track picks on your Home feed tailored to your taste
+                  <div className="text-sm font-extrabold text-white">ai recommendations</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    display personalized ai track picks on your home feed tailored to your taste
                   </div>
                 </div>
               </div>
               <ToggleSwitch
                 checked={aiRecommendationsEnabled}
                 onChange={onToggleAiRecommendations}
-                label="AI Recommendations"
+                label="ai recommendations"
               />
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-3">
               <div>
-                <div className="text-sm font-extrabold text-white">Discovery Balance</div>
-                <div className="text-xs text-white/50 mt-0.5">
-                  Guide how adventurous AI Smart Shuffle and Recommendations should be
+                <div className="text-sm font-extrabold text-white">discovery balance</div>
+                <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                  guide how adventurous ai smart shuffle and recommendations should be
                 </div>
               </div>
 
@@ -1209,42 +1233,42 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                       key={tier}
                       type="button"
                       onClick={() => onChangeAiDiscoveryLevel(tier)}
-                      className={`py-2.5 px-3 rounded-2xl border text-xs font-bold transition-all ${
+                      className={`py-2.5 px-3 rounded-2xl border text-xs font-extrabold transition-colors ${
                         active
-                          ? 'bg-white text-black border-white font-extrabold'
-                          : 'bg-black text-white/75 border-white/15 hover:border-white/35'
+                          ? 'bg-white text-black border-white'
+                          : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                       }`}
                     >
-                      {tier}
+                      {tier.toLowerCase()}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-extrabold text-white">Live AI Engine Status</div>
-                  <div className="text-xs text-white/75 font-bold mt-0.5">
+                  <div className="text-sm font-extrabold text-white">live ai engine status</div>
+                  <div className="text-xs text-[#A1A1AA] font-bold mt-0.5">
                     {isOffline
-                      ? 'Unavailable while offline — reconnect to refresh AI picks'
+                      ? 'unavailable while offline — reconnect to refresh ai picks'
                       : aiRecLoading
-                      ? 'Generating personalized picks with Gemini...'
+                      ? 'generating personalized picks...'
                       : aiRecError
-                      ? aiRecError
+                      ? aiRecError.toLowerCase()
                       : aiRecommendations.length > 0
-                      ? `${aiRecHeadline ?? 'AI Curated Mix'} · ${aiRecommendations.length} picks ready on Home`
-                      : 'Tap Refresh Picks to generate AI recommendations'}
+                      ? `${(aiRecHeadline ?? 'ai curated mix').toLowerCase()} · ${aiRecommendations.length} picks ready on home`
+                      : 'tap refresh picks to generate ai recommendations'}
                   </div>
                 </div>
                 <button
                   type="button"
                   disabled={isOffline || aiRecLoading}
                   onClick={onRefreshAiRecommendations}
-                  className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold disabled:opacity-40 hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                  className="ather-acid-btn px-4 py-2 rounded-full text-xs font-extrabold disabled:opacity-40 active:scale-95 transition-transform shrink-0"
                 >
-                  {aiRecLoading ? 'Generating...' : 'Refresh Picks'}
+                  {aiRecLoading ? 'generating...' : 'refresh picks'}
                 </button>
               </div>
             </div>
@@ -1269,33 +1293,33 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
         return (
           <div className="space-y-6">
             {renderSubPageHeader(
-              'Equalizer',
-              'Shape frequency response with studio presets, live curve preview, and custom bands.'
+              'equalizer',
+              'shape frequency response with studio presets, live curve preview, and custom bands.'
             )}
 
-            <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 space-y-5">
+            <div className="ather-depth-card rounded-3xl p-5 space-y-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-extrabold text-white">Sound Presets</div>
-                  <div className="text-xs text-white/50 mt-0.5">
-                    Active curve: {eqPreset}
+                  <div className="text-sm font-extrabold text-white">sound presets</div>
+                  <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                    active curve: {eqPreset.toLowerCase()}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleSelectEqPreset('Flat')}
-                  className="px-3.5 py-1.5 rounded-full bg-black border border-white/15 text-xs font-bold text-white/80 hover:text-white hover:border-white/35 transition-colors"
+                  className="ather-depth-pill px-3.5 py-1.5 rounded-full text-xs font-extrabold text-white transition-colors"
                 >
-                  Reset Flat
+                  reset flat
                 </button>
               </div>
 
               {/* Live SVG Frequency Curve Visualizer */}
-              <div className="rounded-2xl bg-black border border-white/10 p-3.5 space-y-2">
+              <div className="rounded-2xl bg-[#141418] border border-[#242429] p-3.5 space-y-2">
                 <svg
                   viewBox="0 0 320 120"
                   className="w-full h-28 overflow-visible"
-                  aria-label="Equalizer frequency response curve"
+                  aria-label="equalizer frequency response curve"
                 >
                   <defs>
                     <linearGradient id="eqCurveFill" x1="0" y1="0" x2="0" y2="1">
@@ -1304,9 +1328,9 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     </linearGradient>
                   </defs>
                   {/* Reference horizontal lines (+12, 0, -12 dB) */}
-                  <line x1="20" y1="18" x2="300" y2="18" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <line x1="20" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.18)" />
-                  <line x1="20" y1="102" x2="300" y2="102" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <line x1="20" y1="18" x2="300" y2="18" stroke="rgba(161,161,170,0.22)" strokeDasharray="3 3" />
+                  <line x1="20" y1="60" x2="300" y2="60" stroke="rgba(161,161,170,0.38)" />
+                  <line x1="20" y1="102" x2="300" y2="102" stroke="rgba(161,161,170,0.22)" strokeDasharray="3 3" />
 
                   <path d={areaPath} fill="url(#eqCurveFill)" />
                   <path
@@ -1318,14 +1342,14 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   />
                   {points.map((pt, i) => (
                     <g key={EQ_BANDS[i]}>
-                      <circle cx={pt.x} cy={pt.y} r="4.5" fill="#FFFFFF" />
-                      <circle cx={pt.x} cy={pt.y} r="2" fill="#000000" />
+                      <circle cx={pt.x} cy={pt.y} r="5" fill="#FFFFFF" stroke="#000000" strokeWidth="1.5" />
+                      <circle cx={pt.x} cy={pt.y} r="1.8" fill="#000000" />
                     </g>
                   ))}
                 </svg>
-                <div className="flex items-center justify-between px-2 text-[10px] font-bold text-white/45 tabular-nums">
+                <div className="flex items-center justify-between px-2 text-[10px] font-bold text-[#A1A1AA] tabular-nums">
                   {EQ_BANDS.map((band) => (
-                    <span key={band}>{band}</span>
+                    <span key={band}>{band.toLowerCase()}</span>
                   ))}
                 </div>
               </div>
@@ -1348,73 +1372,73 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                       key={preset}
                       type="button"
                       onClick={() => handleSelectEqPreset(preset)}
-                      className={`px-3.5 py-2 rounded-full text-xs font-bold border transition-colors ${
+                      className={`px-3.5 py-2 rounded-full text-xs font-extrabold border transition-colors ${
                         active
                           ? 'bg-white text-black border-white'
-                          : 'bg-black text-white/75 border-white/15 hover:border-white/35'
+                          : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                       }`}
                     >
-                      {preset}
+                      {preset.toLowerCase()}
                     </button>
                   );
                 })}
               </div>
 
-              <div className="rounded-2xl bg-black border border-white/10 p-4 space-y-3.5">
+              <div className="rounded-2xl bg-[#141418] border border-[#242429] p-4 space-y-3.5">
                 {EQ_BANDS.map((band, idx) => (
                   <div key={band} className="flex items-center gap-3">
-                    <span className="w-12 text-xs font-bold text-white/70 tabular-nums">
-                      {band}
+                    <span className="w-12 text-xs font-bold text-[#A1A1AA] tabular-nums">
+                      {band.toLowerCase()}
                     </span>
                     <input
                       type="range"
                       min={-12}
                       max={12}
                       step={1}
-                      aria-label={`${band} gain`}
+                      aria-label={`${band.toLowerCase()} gain`}
                       value={eqBands[idx]}
                       onChange={(e) => handleEqBandChange(idx, Number(e.target.value))}
                       className="flex-1 accent-white cursor-pointer"
                     />
-                    <span className="w-12 text-right text-xs font-bold tabular-nums text-white">
-                      {eqBands[idx] > 0 ? `+${eqBands[idx]}` : eqBands[idx]} dB
+                    <span className="w-12 text-right text-xs font-extrabold tabular-nums text-white">
+                      {eqBands[idx] > 0 ? `+${eqBands[idx]}` : eqBands[idx]} db
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-              <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+              <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <SpeakerVolumeGlyph className="w-4 h-4 text-white/75 shrink-0" />
+                  <SpeakerVolumeGlyph className="w-4 h-4 text-white shrink-0" />
                   <div>
                     <div className="text-sm font-extrabold text-white">
-                      Volume Normalization
+                      volume normalization
                     </div>
-                    <div className="text-xs text-white/50">
-                      Maintain balanced loudness across albums and playlists
+                    <div className="text-xs font-bold text-[#A1A1AA]">
+                      maintain balanced loudness across albums and playlists
                     </div>
                   </div>
                 </div>
                 <ToggleSwitch
                   checked={volumeNormalization}
-                  onChange={() => setVolumeNormalization((v) => !v)}
-                  label="Volume Normalization"
+                  onChange={toggleVolumeNormalization}
+                  label="volume normalization"
                 />
               </div>
 
-              <div className="px-5 py-4 flex items-center justify-between gap-3">
+              <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-extrabold text-white">Mono Audio</div>
-                  <div className="text-xs text-white/50">
-                    Combine left and right stereo channels into one signal
+                  <div className="text-sm font-extrabold text-white">mono audio</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    combine left and right stereo channels into one signal
                   </div>
                 </div>
                 <ToggleSwitch
                   checked={monoAudio}
-                  onChange={() => setMonoAudio((v) => !v)}
-                  label="Mono Audio"
+                  onChange={toggleMonoAudio}
+                  label="mono audio"
                 />
               </div>
             </div>
@@ -1426,21 +1450,21 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'playback' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Playback Behavior',
-            'Customize track transitions, gapless playback, and queue autoplay.'
+            'playback behavior',
+            'customize track transitions, gapless playback, and queue autoplay.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="p-5 space-y-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-extrabold text-white">Crossfade</div>
-                  <div className="text-xs text-white/50">
-                    Smoothly blend the end of one song into the next
+                  <div className="text-sm font-extrabold text-white">crossfade</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    smoothly blend the end of one song into the next
                   </div>
                 </div>
                 <span className="text-sm font-extrabold tabular-nums text-white">
-                  {crossfadeSeconds === 0 ? 'Off' : `${crossfadeSeconds}s`}
+                  {crossfadeSeconds === 0 ? 'off' : `${crossfadeSeconds}s`}
                 </span>
               </div>
               <input
@@ -1448,62 +1472,62 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                 min={0}
                 max={12}
                 step={1}
-                aria-label="Crossfade duration in seconds"
+                aria-label="crossfade duration in seconds"
                 value={crossfadeSeconds}
                 onChange={(e) => onChangeCrossfade(Number(e.target.value))}
                 className="w-full accent-white cursor-pointer"
               />
-              <div className="flex justify-between text-[11px] font-medium text-white/40 tabular-nums">
+              <div className="flex justify-between text-[11px] font-bold text-[#A1A1AA] tabular-nums">
                 <span>0s</span>
                 <span>6s</span>
                 <span>12s</span>
               </div>
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-white">Gapless Playback</div>
-                <div className="text-xs text-white/50">
-                  Eliminate pauses between consecutive album tracks
+                <div className="text-sm font-extrabold text-white">gapless playback</div>
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  eliminate pauses between consecutive album tracks
                 </div>
               </div>
               <ToggleSwitch
                 checked={gaplessPlayback}
                 onChange={onToggleGapless}
-                label="Gapless Playback"
+                label="gapless playback"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <RadioStreamGlyph className="w-4 h-4 text-white/75 shrink-0" />
+                <RadioStreamGlyph className="w-4 h-4 text-white shrink-0" />
                 <div>
-                  <div className="text-sm font-extrabold text-white">Autoplay</div>
-                  <div className="text-xs text-white/50">
-                    Keep playing recommended music when your queue ends
+                  <div className="text-sm font-extrabold text-white">autoplay</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    keep playing recommended music when your queue ends
                   </div>
                 </div>
               </div>
               <ToggleSwitch
                 checked={autoplay}
                 onChange={onToggleAutoplay}
-                label="Autoplay"
+                label="autoplay"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Open Player When Selecting a Song
+                  open player when selecting a song
                 </div>
-                <div className="text-xs text-white/50">
-                  Automatically expand the full-screen player on tap
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  automatically expand the full-screen player on tap
                 </div>
               </div>
               <ToggleSwitch
                 checked={openPlayerOnTap}
                 onChange={onToggleOpenPlayerOnTap}
-                label="Open Player When Selecting a Song"
+                label="open player when selecting a song"
               />
             </div>
           </div>
@@ -1514,23 +1538,23 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'sleep-timer' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Sleep Timer',
-            'Automatically pause audio playback after a set duration.'
+            'sleep timer',
+            'automatically pause audio playback after a set duration.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 space-y-4">
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
+          <div className="ather-depth-card rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#242429]">
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-white/50">
-                  Current Status
+                <div className="text-xs font-extrabold tracking-wider text-[#A1A1AA]">
+                  current status
                 </div>
                 <div className="text-lg font-extrabold text-white mt-0.5 tabular-nums">
                   {sleepTimerEndOfTrack
-                    ? 'Pauses at end of current track'
+                    ? 'pauses at end of current track'
                     : sleepTimerRemainingSeconds !== null &&
                       sleepTimerRemainingSeconds > 0
-                    ? `Pauses in ${formatTimerCountdown(sleepTimerRemainingSeconds)}`
-                    : 'Timer Off'}
+                    ? `pauses in ${formatTimerCountdown(sleepTimerRemainingSeconds)}`
+                    : 'timer off'}
                 </div>
               </div>
               {(sleepTimerEndOfTrack ||
@@ -1539,20 +1563,20 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => onSetSleepTimerMinutes(null)}
-                  className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+                  className="ather-acid-btn px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
                 >
-                  Cancel Timer
+                  cancel timer
                 </button>
               )}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {[
-                { label: 'Off', mins: null as number | null },
-                { label: '15 Minutes', mins: 15 },
-                { label: '30 Minutes', mins: 30 },
-                { label: '45 Minutes', mins: 45 },
-                { label: '1 Hour', mins: 60 },
+                { label: 'off', mins: null as number | null },
+                { label: '15 minutes', mins: 15 },
+                { label: '30 minutes', mins: 30 },
+                { label: '45 minutes', mins: 45 },
+                { label: '1 hour', mins: 60 },
               ].map((opt) => {
                 const isOff = opt.mins === null;
                 const active = isOff
@@ -1568,10 +1592,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     key={opt.label}
                     type="button"
                     onClick={() => onSetSleepTimerMinutes(opt.mins)}
-                    className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all ${
+                    className={`py-3 px-4 rounded-2xl border text-xs font-extrabold transition-colors min-h-[44px] ${
                       active
                         ? 'bg-white text-black border-white'
-                        : 'bg-black text-white/80 border-white/15 hover:border-white/35'
+                        : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                     }`}
                   >
                     {opt.label}
@@ -1582,13 +1606,13 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
               <button
                 type="button"
                 onClick={onSetSleepTimerEndOfTrack}
-                className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all ${
+                className={`py-3 px-4 rounded-2xl border text-xs font-extrabold transition-colors min-h-[44px] ${
                   sleepTimerEndOfTrack
                     ? 'bg-white text-black border-white'
-                    : 'bg-black text-white/80 border-white/15 hover:border-white/35'
+                    : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                 }`}
               >
-                End of Track
+                end of track
               </button>
             </div>
           </div>
@@ -1599,34 +1623,34 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'reels' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Music Reels',
-            'Control continuous auto-scrolling, clip timing, and music handoff in Reels.'
+            'music reels',
+            'control continuous auto-scrolling, clip timing, and music switching in reels.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Auto-Scroll When Reel Ends
+                  auto-scroll when reel ends
                 </div>
-                <div className="text-xs text-white/50">
-                  Smoothly advance continuously through the Reels stream
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  smoothly advance continuously through the reels stream
                 </div>
               </div>
               <ToggleSwitch
                 checked={reelsAutoScroll}
                 onChange={onToggleReelsAutoScroll}
-                label="Auto-Scroll When Reel Ends"
+                label="auto-scroll when reel ends"
               />
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Reel Preview Duration
+                  reel preview duration
                 </div>
-                <div className="text-xs text-white/50 mt-0.5">
-                  How long each visual reel plays before advancing
+                <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                  how long each visual reel plays before advancing
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-2">
@@ -1637,10 +1661,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                       key={sec}
                       type="button"
                       onClick={() => onChangeReelsDuration(sec)}
-                      className={`py-2.5 rounded-2xl border text-xs font-bold tabular-nums transition-all ${
+                      className={`py-2.5 rounded-2xl border text-xs font-extrabold tabular-nums transition-colors min-h-[44px] ${
                         active
                           ? 'bg-white text-black border-white'
-                          : 'bg-black text-white/75 border-white/15 hover:border-white/35'
+                          : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                       }`}
                     >
                       {sec}s
@@ -1650,19 +1674,19 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
               </div>
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Auto-Pause Music on Reels
+                  auto-pause music on reels
                 </div>
-                <div className="text-xs text-white/50">
-                  Pause background music playback when switching to Reels
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  pause background music playback when switching to reels
                 </div>
               </div>
               <ToggleSwitch
                 checked={reelsAutoPauseMusic}
                 onChange={onToggleReelsAutoPauseMusic}
-                label="Auto-Pause Music on Reels"
+                label="auto-pause music on reels"
               />
             </div>
           </div>
@@ -1673,69 +1697,69 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'interface' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Haptics & Player UI',
-            'Tune tactile visual feedback, mini-player gestures, and player lighting.'
+            'haptics & player ui',
+            'tune tactile visual feedback, mini-player gestures, and player lighting.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Tactile Visual Pulses
+                  tactile visual pulses
                 </div>
-                <div className="text-xs text-white/50">
-                  Subtle Framer Motion cover art and transport button pulse animations
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  subtle cover art and transport button pulse animations
                 </div>
               </div>
               <ToggleSwitch
                 checked={hapticsEnabled}
                 onChange={onToggleHaptics}
-                label="Tactile Visual Pulses"
+                label="tactile visual pulses"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Swipe Away Paused Mini-Player
+                  swipe away paused mini-player
                 </div>
-                <div className="text-xs text-white/50">
-                  Allow horizontal swipe dismissal of the mini-player pill when paused
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  allow horizontal swipe dismissal of the mini-player pill when paused
                 </div>
               </div>
               <ToggleSwitch
                 checked={miniSwipeEnabled}
                 onChange={onToggleMiniSwipe}
-                label="Swipe Away Paused Mini-Player"
+                label="swipe away paused mini-player"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Ambient Glow in Lyrics View
+                  ambient glow in lyrics view
                 </div>
-                <div className="text-xs text-white/50">
-                  Low-saturation artwork ambient illumination while viewing lyrics
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  low-saturation artwork ambient illumination while viewing lyrics
                 </div>
               </div>
               <ToggleSwitch
                 checked={lyricsGlowEnabled}
                 onChange={onToggleLyricsGlow}
-                label="Ambient Glow in Lyrics View"
+                label="ambient glow in lyrics view"
               />
             </div>
 
             {onUpdateLookPrefs && (
               <>
-                <div className="p-5 space-y-3">
+                <div className="ather-depth-row rounded-2xl p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-extrabold text-white">
-                        Glass Surface Opacity
+                        surface contrast depth
                       </div>
-                      <div className="text-xs text-white/50">
-                        Customize floating navigation &amp; mini-player translucency for your account
+                      <div className="text-xs font-bold text-[#A1A1AA]">
+                        customize floating navigation &amp; mini-player surface density for your account
                       </div>
                     </div>
                     <span className="text-sm font-extrabold tabular-nums text-white">
@@ -1747,7 +1771,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     min={0.55}
                     max={1}
                     step={0.05}
-                    aria-label="Glass surface opacity"
+                    aria-label="surface contrast depth"
                     value={lookPrefs.glassOpacity}
                     onChange={(e) =>
                       onUpdateLookPrefs({ glassOpacity: Number(e.target.value) })
@@ -1756,13 +1780,13 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   />
                 </div>
 
-                <div className="px-5 py-4 flex items-center justify-between gap-3">
+                <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-extrabold text-white">
-                      Compact Discovery Tiles
+                      compact discovery tiles
                     </div>
-                    <div className="text-xs text-white/50">
-                      Tighter vertical spacing across shelves and library lists
+                    <div className="text-xs font-bold text-[#A1A1AA]">
+                      tighter vertical spacing across shelves and library lists
                     </div>
                   </div>
                   <ToggleSwitch
@@ -1770,17 +1794,17 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     onChange={() =>
                       onUpdateLookPrefs({ compactTiles: !lookPrefs.compactTiles })
                     }
-                    label="Compact Discovery Tiles"
+                    label="compact discovery tiles"
                   />
                 </div>
 
-                <div className="px-5 py-4 flex items-center justify-between gap-3">
+                <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-extrabold text-white">
-                      Spring Navigation Motion
+                      spring navigation motion
                     </div>
-                    <div className="text-xs text-white/50">
-                      Fluid elastic spring transition on navigation bar &amp; player surfaces
+                    <div className="text-xs font-bold text-[#A1A1AA]">
+                      fluid transition on navigation bar &amp; player surfaces
                     </div>
                   </div>
                   <ToggleSwitch
@@ -1788,7 +1812,7 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                     onChange={() =>
                       onUpdateLookPrefs({ springMotion: !lookPrefs.springMotion })
                     }
-                    label="Spring Navigation Motion"
+                    label="spring navigation motion"
                   />
                 </div>
               </>
@@ -1801,18 +1825,18 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'data-downloads' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Offline Mode & Downloads',
-            'Automatically switch to downloads without internet or toggle Offline Mode manually.'
+            'offline mode & downloads',
+            'automatically switch to downloads without internet or toggle offline mode manually.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <span
-                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 ${
                     isOffline
-                      ? 'bg-white text-black'
-                      : 'bg-white/10 text-white'
+                      ? 'bg-white text-black border-white'
+                      : 'bg-[#141418] text-white border-[#242429]'
                   }`}
                 >
                   {isOffline ? (
@@ -1824,82 +1848,82 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                 <div className="min-w-0">
                   <div className="text-sm font-extrabold text-white">
                     {!isNetworkOnline
-                      ? 'No Internet Connection'
+                      ? 'no internet connection'
                       : manualOfflineMode
-                      ? 'Offline Mode Enabled'
-                      : 'Connected Online'}
+                      ? 'offline mode enabled'
+                      : 'connected online'}
                   </div>
-                  <div className="text-xs text-white/50 truncate">
+                  <div className="text-xs font-bold text-[#A1A1AA] truncate">
                     {isOffline
-                      ? `Playing from ${downloadedCount} downloaded ${downloadedCount === 1 ? 'song' : 'songs'}`
-                      : 'Full catalog streaming and cross-device sync active'}
+                      ? `playing from ${downloadedCount} downloaded ${downloadedCount === 1 ? 'song' : 'songs'}`
+                      : 'full catalog streaming and playback active'}
                   </div>
                 </div>
               </div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/65 shrink-0">
-                {isOffline ? 'Offline' : 'Online'}
+              <span className="ather-depth-pill px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-wider text-white shrink-0">
+                {isOffline ? 'offline' : 'online'}
               </span>
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-white">Offline Mode</div>
-                <div className="text-xs text-white/50">
-                  Play only downloaded songs and switch to Downloads automatically
+                <div className="text-sm font-extrabold text-white">offline mode</div>
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  play only downloaded songs and switch to downloads automatically
                 </div>
               </div>
               <ToggleSwitch
                 checked={manualOfflineMode || !isNetworkOnline}
                 onChange={onToggleManualOfflineMode}
-                label="Offline Mode"
+                label="offline mode"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-white">Data Saver</div>
-                <div className="text-xs text-white/50">
-                  Reduce streaming bitrate when using mobile data
+                <div className="text-sm font-extrabold text-white">data saver</div>
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  reduce streaming bitrate when using mobile data
                 </div>
               </div>
               <ToggleSwitch
                 checked={dataSaver}
-                onChange={() => setDataSaver((v) => !v)}
-                label="Data Saver"
+                onChange={toggleDataSaver}
+                label="data saver"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Download Over Cellular
+                  download over cellular
                 </div>
-                <div className="text-xs text-white/50">
+                <div className="text-xs font-bold text-[#A1A1AA]">
                   {downloadOverCellular
-                    ? 'Offline downloads allowed on mobile data and Wi-Fi'
-                    : 'Restrict offline downloads to Wi-Fi only'}
+                    ? 'offline downloads allowed on mobile data and wi-fi'
+                    : 'restrict offline downloads to wi-fi only'}
                 </div>
               </div>
               <ToggleSwitch
                 checked={downloadOverCellular}
-                onChange={() => setDownloadOverCellular((v) => !v)}
-                label="Download Over Cellular"
+                onChange={toggleDownloadOverCellular}
+                label="download over cellular"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Auto-Download Liked Songs
+                  auto-download liked songs
                 </div>
-                <div className="text-xs text-white/50">
-                  Automatically save songs offline whenever you tap Heart
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  automatically save songs offline whenever you tap heart
                 </div>
               </div>
               <ToggleSwitch
                 checked={autoDownloadFavorites}
                 onChange={onToggleAutoDownloadFavorites}
-                label="Auto-Download Liked Songs"
+                label="auto-download liked songs"
               />
             </div>
           </div>
@@ -1910,44 +1934,44 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'storage' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Storage & Cache',
-            'Inspect offline song storage and free up temporary audio cache.'
+            'storage & cache',
+            'inspect offline song storage and free up temporary audio cache.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 space-y-5">
+          <div className="ather-depth-card rounded-3xl p-5 space-y-5">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-white">Device Storage Used</span>
-                <span className="text-white/65 tabular-nums">
-                  {usedMb} MB of 1,024 MB
+              <div className="flex items-center justify-between text-xs font-extrabold">
+                <span className="text-white">device storage used</span>
+                <span className="text-[#A1A1AA] tabular-nums">
+                  {usedMb} mb of 1,024 mb
                 </span>
               </div>
 
-              <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden flex">
+              <div className="w-full h-3.5 rounded-full bg-[#141418] border border-[#242429] overflow-hidden flex">
                 <div
                   className="h-full bg-white transition-all duration-300"
                   style={{ width: `${downloadsPct}%` }}
                 />
                 <div
-                  className="h-full bg-white/40 transition-all duration-300"
+                  className="h-full bg-[#A1A1AA] transition-all duration-300"
                   style={{ width: `${cachePct}%` }}
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 text-[11px] text-white/60 pt-1 tabular-nums">
+              <div className="flex flex-wrap items-center gap-4 text-[11px] font-bold text-[#A1A1AA] pt-1 tabular-nums">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white inline-block" />
-                  Offline Downloads: {downloadsMb} MB ({downloadedCount}{' '}
+                  <span className="w-2.5 h-2.5 rounded-full bg-white border border-[#242429] inline-block" />
+                  offline downloads: {downloadsMb} mb ({downloadedCount}{' '}
                   {downloadedCount === 1 ? 'track' : 'tracks'})
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white/40 inline-block" />
-                  Audio Cache: {cacheMb} MB
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#A1A1AA] border border-[#242429] inline-block" />
+                  audio cache: {cacheMb} mb
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/[0.08]">
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[#242429]">
               <button
                 type="button"
                 onClick={() => {
@@ -1955,10 +1979,10 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   scheduleNoticeClear(setCacheClearedNotice, 2400);
                 }}
                 disabled={cacheMb === 0}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-xs font-extrabold disabled:opacity-40 hover:bg-white/90 active:scale-95 transition-all"
+                className="ather-acid-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-extrabold disabled:opacity-40 active:scale-95 transition-transform"
               >
                 <TrashGlyph className="w-3.5 h-3.5" />
-                <span>{cacheClearedNotice ? 'Cache Cleared' : 'Clear Cache'}</span>
+                <span>{cacheClearedNotice ? 'cache cleared' : 'clear cache'}</span>
               </button>
 
               <button
@@ -1968,13 +1992,13 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   scheduleNoticeClear(setDownloadsClearedNotice, 2400);
                 }}
                 disabled={downloadedCount === 0}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-black border border-white/20 text-white text-xs font-bold disabled:opacity-40 hover:border-white/45 active:scale-95 transition-all"
+                className="ather-depth-pill inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-white text-xs font-extrabold disabled:opacity-40 active:scale-95 transition-transform"
               >
-                <TrashGlyph className="w-3.5 h-3.5" />
+                <TrashGlyph className="w-3.5 h-3.5 text-[#E4E4E7]" />
                 <span>
                   {downloadsClearedNotice
-                    ? 'Downloads Removed'
-                    : 'Remove All Downloads'}
+                    ? 'downloads removed'
+                    : 'remove all downloads'}
                 </span>
               </button>
             </div>
@@ -1986,72 +2010,72 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'content' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Content & Lyrics',
-            'Filter explicit tracks, configure lyrics display, and choose app language.'
+            'content & lyrics',
+            'filter explicit tracks, configure lyrics display, and choose app language.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <ExplicitShieldGlyph className="w-4 h-4 text-white/75 shrink-0" />
+                <ExplicitShieldGlyph className="w-4 h-4 text-white shrink-0" />
                 <div>
                   <div className="text-sm font-extrabold text-white flex items-center gap-1.5">
-                    <span>Explicit Content</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-white/15 text-white/85">
-                      E
+                    <span>explicit content</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-white text-black border border-white">
+                      e
                     </span>
                   </div>
-                  <div className="text-xs text-white/50">
+                  <div className="text-xs font-bold text-[#A1A1AA]">
                     {explicitAllowed
-                      ? 'Allow tracks labeled explicit during playback'
-                      : 'Block tracks labeled explicit'}
+                      ? 'allow tracks labeled explicit during playback'
+                      : 'block tracks labeled explicit'}
                   </div>
                 </div>
               </div>
               <ToggleSwitch
                 checked={explicitAllowed}
                 onChange={onToggleExplicit}
-                label="Explicit Content"
+                label="explicit content"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <LyricsGlyph className="w-4 h-4 text-white/75 shrink-0" />
+                <LyricsGlyph className="w-4 h-4 text-white shrink-0" />
                 <div>
-                  <div className="text-sm font-extrabold text-white">Show Lyrics</div>
-                  <div className="text-xs text-white/50">
-                    Enable time-synced lyrics on the full-screen player
+                  <div className="text-sm font-extrabold text-white">show lyrics</div>
+                  <div className="text-xs font-bold text-[#A1A1AA]">
+                    enable time-synced lyrics on the full-screen player
                   </div>
                 </div>
               </div>
               <ToggleSwitch
                 checked={showLyricsEnabled}
                 onChange={onToggleShowLyrics}
-                label="Show Lyrics"
+                label="show lyrics"
               />
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-extrabold text-white">
-                <GlobeGlyph className="w-4 h-4 text-white/75" />
-                <span>App Language</span>
+                <GlobeGlyph className="w-4 h-4 text-white" />
+                <span>app language</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {LANGUAGES.map((lang) => {
-                  const active = language === lang;
+                  const active = language.toLowerCase() === lang.toLowerCase();
                   return (
                     <button
                       key={lang}
                       type="button"
                       onClick={() => setLanguage(lang)}
-                      className={`py-2.5 px-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between transition-colors ${
+                      className={`py-2.5 px-3.5 rounded-2xl border text-xs font-extrabold flex items-center justify-between transition-colors min-h-[44px] ${
                         active
                           ? 'bg-white text-black border-white'
-                          : 'bg-black text-white/75 border-white/15 hover:border-white/35'
+                          : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                       }`}
                     >
-                      <span>{lang}</span>
+                      <span>{lang.toLowerCase()}</span>
                       {active && <CheckGlyph className="w-3.5 h-3.5" />}
                     </button>
                   );
@@ -2066,49 +2090,49 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'privacy' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Listening Activity & Privacy',
-            'Control recent play history tracking and private listening sessions.'
+            'listening activity & privacy',
+            'control recent play history tracking and private listening sessions.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Record Listening Activity
+                  record listening activity
                 </div>
-                <div className="text-xs text-white/50">
-                  Save played songs to your Library → Activity recents
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  save played songs to your library → activity recents
                 </div>
               </div>
               <ToggleSwitch
                 checked={trackActivity}
                 onChange={onToggleTrackActivity}
-                label="Record Listening Activity"
+                label="record listening activity"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Private Session
+                  private session
                 </div>
-                <div className="text-xs text-white/50">
-                  Listen temporarily without updating your recent taste profile
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  listen temporarily without updating your recent taste profile
                 </div>
               </div>
               <ToggleSwitch
                 checked={privateSession}
                 onChange={onTogglePrivateSession}
-                label="Private Session"
+                label="private session"
               />
             </div>
 
-            <div className="p-5 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl p-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Recent Listening History
+                  recent listening history
                 </div>
-                <div className="text-xs text-white/50 tabular-nums">
+                <div className="text-xs font-bold text-[#A1A1AA] tabular-nums">
                   {recentCount} recently played {recentCount === 1 ? 'track' : 'tracks'} stored
                 </div>
               </div>
@@ -2119,9 +2143,9 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
                   onClearRecentHistory();
                   scheduleNoticeClear(setHistoryClearedNotice, 2400);
                 }}
-                className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold disabled:opacity-40 hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                className="ather-acid-btn px-4 py-2 rounded-full text-xs font-extrabold disabled:opacity-40 active:scale-95 transition-transform shrink-0"
               >
-                {historyClearedNotice ? 'Cleared' : 'Clear History'}
+                {historyClearedNotice ? 'cleared' : 'clear history'}
               </button>
             </div>
           </div>
@@ -2132,52 +2156,52 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'notifications' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Notifications',
-            'Choose which artist releases and app updates you want to hear about.'
+            'notifications',
+            'choose which artist releases and app updates you want to hear about.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-white">New Releases</div>
-                <div className="text-xs text-white/50">
-                  Alerts when artists you listen to drop new singles or albums
+                <div className="text-sm font-extrabold text-white">new releases</div>
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  alerts when artists you listen to drop new singles or albums
                 </div>
               </div>
               <ToggleSwitch
                 checked={notifyNewReleases}
-                onChange={() => setNotifyNewReleases((v) => !v)}
-                label="New Releases notifications"
+                onChange={toggleNotifyNewReleases}
+                label="new releases notifications"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  Playlist &amp; Mix Updates
+                  playlist &amp; mix updates
                 </div>
-                <div className="text-xs text-white/50">
-                  Notifications when curated collections refresh with new tracks
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  notifications when curated collections refresh with new tracks
                 </div>
               </div>
               <ToggleSwitch
                 checked={notifyMixUpdates}
-                onChange={() => setNotifyMixUpdates((v) => !v)}
-                label="Playlist and Mix updates"
+                onChange={toggleNotifyMixUpdates}
+                label="playlist and mix updates"
               />
             </div>
 
-            <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-extrabold text-white">App Updates</div>
-                <div className="text-xs text-white/50">
-                  Feature announcements and audio engine improvements
+                <div className="text-sm font-extrabold text-white">app updates</div>
+                <div className="text-xs font-bold text-[#A1A1AA]">
+                  feature announcements and audio engine improvements
                 </div>
               </div>
               <ToggleSwitch
                 checked={notifyAppUpdates}
-                onChange={() => setNotifyAppUpdates((v) => !v)}
-                label="App Updates notifications"
+                onChange={toggleNotifyAppUpdates}
+                label="app updates notifications"
               />
             </div>
           </div>
@@ -2188,35 +2212,35 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'help' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Help & About',
-            'Support resources, terms, privacy details, and app information.'
+            'help & about',
+            'support resources, terms, privacy details, and app information.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="p-5 space-y-2">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-extrabold text-white">
-                <HelpGlyph className="w-4 h-4 text-white/75" />
-                <span>Help Center</span>
+                <HelpGlyph className="w-4 h-4 text-white" />
+                <span>help center</span>
               </div>
-              <p className="text-xs text-white/65 leading-relaxed">
-                Manage offline downloads, lossless audio tiers, queue ordering, Sleep Timer, Reels auto-scroll, and custom playlist covers directly inside ATHER. Contact support at help@ather.audio.
+              <p className="text-xs font-bold text-[#A1A1AA] leading-relaxed">
+                manage offline downloads, lossless audio tiers, queue ordering, sleep timer, reels auto-scroll, and custom playlist covers directly inside Ather. contact support at help@ather.audio.
               </p>
             </div>
 
-            <div className="p-5 space-y-2">
+            <div className="ather-depth-row rounded-2xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-extrabold text-white">
-                <DocumentGlyph className="w-4 h-4 text-white/75" />
-                <span>Terms &amp; Privacy Policy</span>
+                <DocumentGlyph className="w-4 h-4 text-white" />
+                <span>terms &amp; privacy policy</span>
               </div>
-              <p className="text-xs text-white/65 leading-relaxed">
-                Your playlists, offline downloads, profile photo, and listening preferences stay private to your session. You can pause or clear listening history anytime under Listening Activity &amp; Privacy.
+              <p className="text-xs font-bold text-[#A1A1AA] leading-relaxed">
+                your playlists, offline downloads, profile photo, and listening preferences stay private to your session. you can pause or clear listening history anytime under listening activity &amp; privacy.
               </p>
             </div>
 
-            <div className="p-5 flex items-center justify-between gap-3">
-              <span className="text-sm font-extrabold text-white">ATHER Audio</span>
-              <span className="text-xs font-semibold text-white/50 tabular-nums">
-                Version 2.4 · Lossless Engine
+            <div className="ather-depth-row rounded-2xl p-4 flex items-center justify-between gap-3">
+              <span className="text-sm font-extrabold text-white">Ather audio</span>
+              <span className="text-xs font-bold text-white tabular-nums">
+                version 2.4 · lossless engine
               </span>
             </div>
           </div>
@@ -2227,57 +2251,57 @@ export const ProfileSettingsScreen: React.FC<ProfileSettingsScreenProps> = ({
       {activePage === 'permissions' && (
         <div className="space-y-6">
           {renderSubPageHeader(
-            'Allow Access',
-            'Manage device permissions for notifications and persistent offline storage.'
+            'allow access',
+            'manage device permissions for notifications and persistent offline storage.'
           )}
 
-          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15 overflow-hidden">
-            <div className="p-5 flex items-center justify-between gap-3">
+          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
+            <div className="ather-depth-row rounded-2xl p-4 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-extrabold text-white">Offline Storage Persistence</div>
-                <div className="text-xs text-white/50 mt-0.5">
-                  Prevents the browser from evicting your downloaded offline songs
+                <div className="text-sm font-extrabold text-white">offline storage persistence</div>
+                <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                  prevents the browser from evicting your downloaded offline songs
                 </div>
               </div>
               {storagePersisted ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-xs font-extrabold shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black border border-white text-xs font-extrabold shrink-0">
                   <CheckGlyph className="w-3.5 h-3.5" />
-                  <span>Protected</span>
+                  <span>protected</span>
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => void requestPersistentStorage()}
-                  className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                  className="ather-acid-btn px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-transform shrink-0"
                 >
-                  Allow Storage
+                  allow storage
                 </button>
               )}
             </div>
 
-            <div className="p-5 flex items-center justify-between gap-3">
+            <div className="ather-depth-row rounded-2xl p-4 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-extrabold text-white">Push Notifications</div>
-                <div className="text-xs text-white/50 mt-0.5">
-                  Release alerts and mix updates from artists you follow
+                <div className="text-sm font-extrabold text-white">push notifications</div>
+                <div className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                  release alerts and mix updates from artists you follow
                 </div>
               </div>
               {notifPermission === 'granted' ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-xs font-extrabold shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black border border-white text-xs font-extrabold shrink-0">
                   <CheckGlyph className="w-3.5 h-3.5" />
-                  <span>Allowed</span>
+                  <span>allowed</span>
                 </span>
               ) : notifPermission === 'unsupported' ? (
-                <span className="text-xs font-semibold text-white/45 shrink-0">
-                  Unsupported
+                <span className="text-xs font-bold text-[#A1A1AA] shrink-0">
+                  unsupported
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => void requestNotificationPermission()}
-                  className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                  className="ather-acid-btn px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-transform shrink-0"
                 >
-                  Allow Alerts
+                  allow alerts
                 </button>
               )}
             </div>

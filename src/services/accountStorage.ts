@@ -47,6 +47,18 @@ export interface StoredAiSettings {
 export interface StoredAppPreferences {
   autoplay: boolean;
   audioQuality: string;
+  wifiQuality?: 'Low' | 'Normal' | 'High';
+  cellularQuality?: 'Low' | 'Normal' | 'High';
+  downloadQuality?: 'Low' | 'Normal' | 'High';
+  losslessSpatial?: boolean;
+  volumeNormalization?: boolean;
+  monoAudio?: boolean;
+  dataSaver?: boolean;
+  downloadOverCellular?: boolean;
+  language?: string;
+  notifyNewReleases?: boolean;
+  notifyMixUpdates?: boolean;
+  notifyAppUpdates?: boolean;
   explicitAllowed: boolean;
   showLyricsEnabled: boolean;
   hapticsEnabled: boolean;
@@ -260,10 +272,10 @@ export function setActiveAccount(account: ActiveAccountIdentity | null): void {
             ? normalized.email.split('@')[0]
             : '') ||
           (normalized.provider === 'guest'
-            ? 'Guest Listener'
+            ? 'guest listener'
             : normalized.provider === 'apple'
-            ? 'Apple Listener'
-            : 'ATHER Listener');
+            ? 'apple listener'
+            : 'Ather listener');
         const baseHandle =
           fallbackName
             .toLowerCase()
@@ -548,7 +560,19 @@ export function getDefaultAiSettings(): StoredAiSettings {
 export function getDefaultAppPreferences(): StoredAppPreferences {
   return {
     autoplay: true,
-    audioQuality: 'High · Spatial',
+    audioQuality: 'high · spatial',
+    wifiQuality: 'High',
+    cellularQuality: 'Normal',
+    downloadQuality: 'High',
+    losslessSpatial: true,
+    volumeNormalization: true,
+    monoAudio: false,
+    dataSaver: false,
+    downloadOverCellular: false,
+    language: 'english (us)',
+    notifyNewReleases: true,
+    notifyMixUpdates: true,
+    notifyAppUpdates: false,
     explicitAllowed: true,
     showLyricsEnabled: true,
     hapticsEnabled: true,
@@ -577,7 +601,7 @@ export function getDefaultProfile(
   const baseName =
     acc?.displayName ||
     (!isGuest && acc?.email ? acc.email.split('@')[0] : '') ||
-    (isGuest ? 'Guest Listener' : 'Listener');
+    (isGuest ? 'guest listener' : 'listener');
   const handleSlug =
     baseName
       .toLowerCase()

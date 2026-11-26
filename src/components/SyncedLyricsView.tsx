@@ -97,17 +97,17 @@ export const SyncedLyricsView: React.FC<SyncedLyricsViewProps> = ({
               isActive
                 ? 'text-2xl sm:text-3xl text-white scale-[1.02]'
                 : isPast
-                ? 'text-lg sm:text-xl text-white/40 hover:text-white/75'
-                : 'text-lg sm:text-xl text-white/30 hover:text-white/70'
+                ? 'text-lg sm:text-xl text-[#A1A1AA] hover:text-white'
+                : 'text-lg sm:text-xl text-[#52525B] hover:text-[#A1A1AA]'
             }`}
             style={{
               textShadow:
                 isActive && lyricsGlowEnabled
-                  ? '0 0 28px rgba(255,255,255,0.28)'
+                  ? '0 0 24px rgba(255,255,255,0.22)'
                   : 'none',
             }}
           >
-            {line.text}
+            {line.text.toLowerCase()}
           </button>
         );
       })}

@@ -84,15 +84,13 @@ import { fetchDeezerArtistJsonp } from './services/artistInfoApi';
 import { audioEngine } from './services/audioEngine';
 import {
   fetchAudiusTrending,
-  resolveFullAudiusTrack,
   searchAudiusTracks,
 } from './services/audiusApi';
+import { cloudSync } from './services/cloudSync';
 import {
-  CloudSyncStatus,
-  cloudSync,
-  getCloudSyncStatus,
-  subscribeCloudSyncStatus,
-} from './services/cloudSync';
+  AudioQualityTier,
+  resolveFullAudioStream,
+} from './services/simpmusicStreamResolver';
 import {
   RegisteredDevice,
   RemoteCommandType,
@@ -127,13 +125,12 @@ import {
 import {
   LIVE_FEED_TTL_MS,
   clearMusicFeedCaches,
+  fetchAtherHomeShelves,
   fetchPersonalizedReelsPool,
-  fetchYouTubeMusicHomeShelves,
+  getCachedCategorySongs,
   getLiveNewReleases,
   isOfficialArtistTrack,
   isValidArtistName,
-  resolveFullYouTubeTrack,
-  searchFreeYouTubeSongs,
   searchRealSongs,
 } from './services/musicApi';
 import {
@@ -169,11 +166,11 @@ const NAV_ITEMS: {
   label: string;
   icon: React.ComponentType<NavIconProps>;
 }[] = [
-  { id: 'home', label: 'Home', icon: HomeNavIcon },
-  { id: 'search', label: 'Search', icon: SearchNavIcon },
-  { id: 'reels', label: 'Reels', icon: ReelsNavIcon },
-  { id: 'library', label: 'Library', icon: LibraryNavIcon },
-  { id: 'profile', label: 'Profile', icon: ProfileNavIcon },
+  { id: 'home', label: 'home', icon: HomeNavIcon },
+  { id: 'search', label: 'search', icon: SearchNavIcon },
+  { id: 'reels', label: 'reels', icon: ReelsNavIcon },
+  { id: 'library', label: 'library', icon: LibraryNavIcon },
+  { id: 'profile', label: 'profile', icon: ProfileNavIcon },
 ];
 
 function buildLiveCollections(
@@ -193,55 +190,55 @@ function buildLiveCollections(
   }[] = [
     {
       id: 'apple-top-25',
-      titleLines: ['TOP SONGS', 'CHARTS'],
+      titleLines: ['top songs', 'charts'],
       subtitle: `${chartSongs.slice(0, 15).length} most played chart hits`,
-      description: 'Live Top Songs chart curated with crisp high-res audio.',
-      badge: 'Live Charts',
+      description: 'live top songs chart curated with crisp high-res audio.',
+      badge: 'live charts',
       theme: 'light-offwhite',
       slice: chartSongs.slice(0, 15),
     },
     {
       id: 'for-you-mix',
-      titleLines: ['FOR YOU', 'QUICK PICKS'],
-      subtitle: 'Tuned to your taste profile',
-      description: 'Personalized tracks built from your artists, genres, and recent plays.',
-      badge: 'Personalized',
+      titleLines: ['for you', 'quick picks'],
+      subtitle: 'tuned to your taste profile',
+      description: 'personalized tracks built from your artists, genres, and recent plays.',
+      badge: 'personalized',
       theme: 'dark-indigo',
       slice: forYouQuickPicks.slice(0, 15),
     },
     {
       id: 'new-drops-mix',
-      titleLines: ['NEW', 'RELEASES'],
-      subtitle: 'Latest drops out this week',
-      description: 'Fresh official singles and album highlights added right away.',
-      badge: 'New Drops',
+      titleLines: ['new', 'releases'],
+      subtitle: 'latest drops out this week',
+      description: 'fresh official singles and album highlights added right away.',
+      badge: 'new drops',
       theme: 'dark-lime',
       slice: newReleaseTracks.slice(0, 15),
     },
     {
       id: 'audius-top-global',
-      titleLines: ['TRENDING', 'STREAMS'],
+      titleLines: ['trending', 'streams'],
       subtitle: `${audiusTracks.slice(0, 12).length} trending full streams`,
-      description: 'Full-length trending tracks climbing global listening charts.',
-      badge: 'Trending Now',
+      description: 'full-length trending tracks climbing global listening charts.',
+      badge: 'trending now',
       theme: 'light-offwhite',
       slice: audiusTracks.slice(0, 12),
     },
     {
       id: 'audius-fresh-drops',
-      titleLines: ['FRESH', 'DISCOVERIES'],
-      subtitle: 'Rising independent releases',
-      description: 'Independent cuts surfacing from emerging artists worldwide.',
-      badge: 'Rising Picks',
+      titleLines: ['fresh', 'discoveries'],
+      subtitle: 'rising independent releases',
+      description: 'independent cuts surfacing from emerging artists worldwide.',
+      badge: 'rising picks',
       theme: 'dark-lime',
       slice: audiusTracks.slice(8, 20),
     },
     {
       id: 'late-night-pulse',
-      titleLines: ['LATE NIGHT', 'PULSE'],
-      subtitle: 'After-hours rotation & deep cuts',
-      description: 'Hand-picked evening groove selections across R&B, hip hop, and soul.',
-      badge: 'After Hours',
+      titleLines: ['late night', 'pulse'],
+      subtitle: 'after-hours rotation & deep cuts',
+      description: 'hand-picked evening groove selections across r&b, hip hop, and soul.',
+      badge: 'after hours',
       theme: 'dark-indigo',
       slice: (chartSongs.length > 10 ? chartSongs.slice(10, 24) : forYouQuickPicks.slice(4, 16)),
     },
@@ -291,17 +288,14 @@ export default function App() {
     account: ActiveAccountIdentity;
     stage: 'signing-in' | 'syncing';
   } | null>(null);
-  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(() =>
-    getCloudSyncStatus()
-  );
   const [settingsDevicesOpen, setSettingsDevicesOpen] = useState<boolean>(false);
   const [settingsBrowserOutputs, setSettingsBrowserOutputs] = useState<
     BrowserAudioOutputOption[]
   >([
     {
       id: 'default',
-      name: 'This Device',
-      spec: 'Browser Audio Output',
+      name: 'this device',
+      spec: 'browser audio output',
     },
   ]);
   const [activeSettingsOutputId, setActiveSettingsOutputId] =
@@ -321,12 +315,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    return subscribeCloudSyncStatus((next) => {
-      setSyncStatus(next);
-    });
-  }, []);
-
-  useEffect(() => {
     if (!settingsDevicesOpen || !navigator.mediaDevices?.enumerateDevices) return;
     let cancelled = false;
     navigator.mediaDevices
@@ -337,8 +325,8 @@ export default function App() {
           .filter((d) => d.kind === 'audiooutput' && d.deviceId)
           .map((d, idx) => ({
             id: d.deviceId,
-            name: d.label || (idx === 0 ? 'System Default Output' : `Audio Output ${idx + 1}`),
-            spec: 'Live Browser Output',
+            name: d.label?.toLowerCase() || (idx === 0 ? 'system default output' : `audio output ${idx + 1}`),
+            spec: 'live browser output',
           }));
         setSettingsBrowserOutputs(
           outputs.length > 0
@@ -346,8 +334,8 @@ export default function App() {
             : [
                 {
                   id: 'default',
-                  name: 'This Device',
-                  spec: 'Browser Audio Output',
+                  name: 'this device',
+                  spec: 'browser audio output',
                 },
               ]
         );
@@ -357,8 +345,8 @@ export default function App() {
           setSettingsBrowserOutputs([
             {
               id: 'default',
-              name: 'This Device',
-              spec: 'Browser Audio Output',
+              name: 'this device',
+              spec: 'browser audio output',
             },
           ]);
         }
@@ -443,7 +431,7 @@ export default function App() {
   const [onlinePopupVisible, setOnlinePopupVisible] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [onlinePopupLabel, setOnlinePopupLabel] = useState<string>('Online');
+  const [onlinePopupLabel, setOnlinePopupLabel] = useState<string>('online');
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
   const offlineNoticeTimerRef = useRef<number | null>(null);
   const onlinePopupTimerRef = useRef<number | null>(null);
@@ -526,7 +514,7 @@ export default function App() {
 
   const allTracks = useMemo(() => Object.values(tracksById), [tracksById]);
 
-  // Live Discovery Feeds State (Apple RSS + iTunes + Audius + Free YouTube + Podcasts/Audiobooks)
+  // live discovery feeds state (apple itunes rss + itunes search + audius)
   const [allFeedTracks, setAllFeedTracks] = useState<ShowcaseTrack[]>([]);
   const [popularTracks, setPopularTracks] = useState<ShowcaseTrack[]>([]);
   const [audiusTrendingTracks, setAudiusTrendingTracks] = useState<
@@ -545,7 +533,7 @@ export default function App() {
   const [homeCategories, setHomeCategories] = useState<string[]>(() =>
     getRankedCategories()
   );
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [reelsTracks, setReelsTracks] = useState<ShowcaseTrack[]>([]);
   const [refreshingReels, setRefreshingReels] = useState<boolean>(false);
   const [feedLoading, setFeedLoading] = useState<boolean>(true);
@@ -681,7 +669,7 @@ export default function App() {
     return readAccountJson('profile', getDefaultProfile(acct), acct?.id);
   }, []);
   const [displayName, setDisplayName] = useState<string>(
-    initialProfile.displayName || 'Listener'
+    initialProfile.displayName || 'listener'
   );
   const [handle, setHandle] = useState<string>(initialProfile.handle || '@listener');
   const [email, setEmail] = useState<string>(() => {
@@ -757,6 +745,42 @@ export default function App() {
   const [autoDownloadFavorites, setAutoDownloadFavorites] = useState<boolean>(
     initialPrefs.autoDownloadFavorites ?? false
   );
+  const [wifiQuality, setWifiQuality] = useState<AudioQualityTier>(
+    (initialPrefs.wifiQuality as AudioQualityTier) ?? 'High'
+  );
+  const [cellularQuality, setCellularQuality] = useState<AudioQualityTier>(
+    (initialPrefs.cellularQuality as AudioQualityTier) ?? 'Normal'
+  );
+  const [downloadQuality, setDownloadQuality] = useState<AudioQualityTier>(
+    (initialPrefs.downloadQuality as AudioQualityTier) ?? 'High'
+  );
+  const [losslessSpatial, setLosslessSpatial] = useState<boolean>(
+    initialPrefs.losslessSpatial ?? true
+  );
+  const [volumeNormalization, setVolumeNormalization] = useState<boolean>(
+    initialPrefs.volumeNormalization ?? true
+  );
+  const [monoAudio, setMonoAudio] = useState<boolean>(
+    initialPrefs.monoAudio ?? false
+  );
+  const [dataSaver, setDataSaver] = useState<boolean>(
+    initialPrefs.dataSaver ?? false
+  );
+  const [downloadOverCellular, setDownloadOverCellular] = useState<boolean>(
+    initialPrefs.downloadOverCellular ?? false
+  );
+  const [language, setLanguage] = useState<string>(
+    (initialPrefs.language || 'english (us)').toLowerCase()
+  );
+  const [notifyNewReleases, setNotifyNewReleases] = useState<boolean>(
+    initialPrefs.notifyNewReleases ?? true
+  );
+  const [notifyMixUpdates, setNotifyMixUpdates] = useState<boolean>(
+    initialPrefs.notifyMixUpdates ?? true
+  );
+  const [notifyAppUpdates, setNotifyAppUpdates] = useState<boolean>(
+    initialPrefs.notifyAppUpdates ?? false
+  );
 
   useEffect(() => {
     if (!activeAccount || hydratedAccountIdRef.current !== activeAccount.id) return;
@@ -784,6 +808,18 @@ export default function App() {
         trackActivity,
         privateSession,
         autoDownloadFavorites,
+        wifiQuality,
+        cellularQuality,
+        downloadQuality,
+        losslessSpatial,
+        volumeNormalization,
+        monoAudio,
+        dataSaver,
+        downloadOverCellular,
+        language,
+        notifyNewReleases,
+        notifyMixUpdates,
+        notifyAppUpdates,
       },
       activeAccount.id
     );
@@ -803,7 +839,46 @@ export default function App() {
     trackActivity,
     privateSession,
     autoDownloadFavorites,
+    wifiQuality,
+    cellularQuality,
+    downloadQuality,
+    losslessSpatial,
+    volumeNormalization,
+    monoAudio,
+    dataSaver,
+    downloadOverCellular,
+    language,
+    notifyNewReleases,
+    notifyMixUpdates,
+    notifyAppUpdates,
     activeAccount,
+  ]);
+
+  const effectiveStreamQuality = useMemo<AudioQualityTier>(() => {
+    const connType =
+      typeof navigator !== 'undefined'
+        ? ((navigator as unknown as { connection?: { type?: string } }).connection?.type ?? '')
+        : '';
+    if (connType === 'cellular') {
+      return dataSaver ? 'Low' : cellularQuality;
+    }
+    return wifiQuality;
+  }, [wifiQuality, cellularQuality, dataSaver]);
+
+  useEffect(() => {
+    audioEngine.setPreferredQualityTier(effectiveStreamQuality);
+    audioEngine.setEqBands(eqState.bands);
+    audioEngine.setVolumeNormalization(volumeNormalization);
+    audioEngine.setMonoAudio(monoAudio);
+    audioEngine.setCrossfadeSeconds(crossfadeSeconds);
+    audioEngine.setGaplessPlayback(gaplessPlayback);
+  }, [
+    effectiveStreamQuality,
+    eqState.bands,
+    volumeNormalization,
+    monoAudio,
+    crossfadeSeconds,
+    gaplessPlayback,
   ]);
 
   useEffect(() => {
@@ -828,44 +903,9 @@ export default function App() {
   } | null>(null);
   const justSwipedRef = useRef<boolean>(false);
 
-  // Sliding thumb state for bottom navigation bar
-  const navRef = useRef<HTMLElement>(null);
+  // Bottom dock height measurement for scroll clearance
   const bottomDockRef = useRef<HTMLDivElement>(null);
   const [bottomDockHeight, setBottomDockHeight] = useState<number>(176);
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [thumbStyle, setThumbStyle] = useState<{
-    left: number;
-    width: number;
-    ready: boolean;
-  }>({ left: 0, width: 0, ready: false });
-
-  const measureNavThumb = useCallback(() => {
-    const activeEl = tabRefs.current[activeTab];
-    if (!activeEl) return;
-    setThumbStyle({
-      left: activeEl.offsetLeft,
-      width: activeEl.offsetWidth,
-      ready: true,
-    });
-  }, [activeTab]);
-
-  useLayoutEffect(() => {
-    measureNavThumb();
-    const navEl = navRef.current;
-    if (!navEl) return;
-    const observer = new ResizeObserver(() => {
-      measureNavThumb();
-    });
-    observer.observe(navEl);
-    Object.values(tabRefs.current).forEach((el) => {
-      if (el) observer.observe(el);
-    });
-    window.addEventListener('resize', measureNavThumb);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measureNavThumb);
-    };
-  }, [measureNavThumb]);
 
   useLayoutEffect(() => {
     const dockEl = bottomDockRef.current;
@@ -894,24 +934,52 @@ export default function App() {
       ? audioDuration
       : currentTrack?.duration ?? 0;
 
+  const filterExplicitTracks = useCallback(
+    (list: ShowcaseTrack[]) =>
+      explicitAllowed ? list : list.filter((t) => !t.explicit),
+    [explicitAllowed]
+  );
+
+  const playableFeedTracks = useMemo(
+    () => filterExplicitTracks(allFeedTracks),
+    [filterExplicitTracks, allFeedTracks]
+  );
+
+  const visiblePopularTracks = useMemo(
+    () => filterExplicitTracks(popularTracks),
+    [filterExplicitTracks, popularTracks]
+  );
+
+  const visibleReelsTracks = useMemo(
+    () => filterExplicitTracks(reelsTracks),
+    [filterExplicitTracks, reelsTracks]
+  );
+
   const collections = useMemo(
     () =>
       buildLiveCollections(
-        audiusTrendingTracks,
-        chartSongTracks,
-        newReleaseTracks,
-        forYouQuickPicks
+        filterExplicitTracks(audiusTrendingTracks),
+        filterExplicitTracks(chartSongTracks),
+        filterExplicitTracks(newReleaseTracks),
+        filterExplicitTracks(forYouQuickPicks)
       ),
-    [audiusTrendingTracks, chartSongTracks, newReleaseTracks, forYouQuickPicks]
+    [
+      filterExplicitTracks,
+      audiusTrendingTracks,
+      chartSongTracks,
+      newReleaseTracks,
+      forYouQuickPicks,
+    ]
   );
 
   const forYouCards = useMemo<HomeShelfCard[]>(() => {
-    const source =
+    const source = filterExplicitTracks(
       forYouQuickPicks.length > 0
         ? forYouQuickPicks
         : chartSongTracks.length > 0
         ? chartSongTracks
-        : popularTracks;
+        : popularTracks
+    );
     return source.slice(0, 14).map((t) => ({
       id: `fy-${t.id}`,
       title: t.title,
@@ -922,7 +990,7 @@ export default function App() {
       trackId: t.id,
       track: t,
     }));
-  }, [forYouQuickPicks, chartSongTracks, popularTracks]);
+  }, [filterExplicitTracks, forYouQuickPicks, chartSongTracks, popularTracks]);
 
   const albumCards = useMemo<HomeShelfCard[]>(() => {
     const source = albumsForYou.length > 0 ? albumsForYou : knownAlbums;
@@ -931,7 +999,6 @@ export default function App() {
       title: alb.title,
       artist: alb.artist,
       subtitle: alb.year ? `${alb.artist} · ${alb.year}` : alb.artist,
-      badge: 'Album',
       artwork: alb.artwork,
       coverUrl: alb.coverUrl,
       albumId: alb.id,
@@ -940,23 +1007,29 @@ export default function App() {
   }, [albumsForYou, knownAlbums]);
 
   const trendingCards = useMemo<HomeShelfCard[]>(() => {
-    const pool = mergeUniqueTracks(
-      trendingShelfTracks,
-      chartSongTracks,
-      audiusTrendingTracks
+    const pool = filterExplicitTracks(
+      mergeUniqueTracks(
+        trendingShelfTracks,
+        chartSongTracks,
+        audiusTrendingTracks
+      )
     );
     return pool.slice(0, 14).map((t) => ({
       id: `trd-${t.id}`,
       title: t.title,
       artist: t.artist,
       subtitle: t.artist,
-      badge: t.source === 'youtube' ? 'Viral' : 'Charting',
       artwork: t.artwork,
       coverUrl: t.coverUrl,
       trackId: t.id,
       track: t,
     }));
-  }, [trendingShelfTracks, chartSongTracks, audiusTrendingTracks]);
+  }, [
+    filterExplicitTracks,
+    trendingShelfTracks,
+    chartSongTracks,
+    audiusTrendingTracks,
+  ]);
 
   const newReleaseCards = useMemo<HomeShelfCard[]>(() => {
     const albumEntries: HomeShelfCard[] = newReleaseAlbums.slice(0, 6).map((alb) => ({
@@ -964,28 +1037,30 @@ export default function App() {
       title: alb.title,
       artist: alb.artist,
       subtitle: alb.artist,
-      badge: 'New Album',
       artwork: alb.artwork,
       coverUrl: alb.coverUrl,
       albumId: alb.id,
       albumItem: alb,
     }));
-    const trackEntries: HomeShelfCard[] = newReleaseTracks.slice(0, 12).map((t) => ({
-      id: `nrt-${t.id}`,
-      title: t.title,
-      artist: t.artist,
-      subtitle: t.artist,
-      badge: 'New Drop',
-      artwork: t.artwork,
-      coverUrl: t.coverUrl,
-      trackId: t.id,
-      track: t,
-    }));
+    const trackEntries: HomeShelfCard[] = filterExplicitTracks(newReleaseTracks)
+      .slice(0, 12)
+      .map((t) => ({
+        id: `nrt-${t.id}`,
+        title: t.title,
+        artist: t.artist,
+        subtitle: t.artist,
+        artwork: t.artwork,
+        coverUrl: t.coverUrl,
+        trackId: t.id,
+        track: t,
+      }));
     return [...albumEntries.slice(0, 4), ...trackEntries].slice(0, 16);
-  }, [newReleaseAlbums, newReleaseTracks]);
+  }, [filterExplicitTracks, newReleaseAlbums, newReleaseTracks]);
 
   const exploreCards = useMemo<HomeShelfCard[]>(() => {
-    const pool = mergeUniqueTracks(audiusTrendingTracks, popularTracks);
+    const pool = filterExplicitTracks(
+      mergeUniqueTracks(audiusTrendingTracks, popularTracks)
+    );
     return pool.slice(0, 12).map((t) => ({
       id: `exp-${t.id}`,
       title: t.title,
@@ -995,7 +1070,7 @@ export default function App() {
       trackId: t.id,
       track: t,
     }));
-  }, [audiusTrendingTracks, popularTracks]);
+  }, [filterExplicitTracks, audiusTrendingTracks, popularTracks]);
 
   const pushRecentTrack = useCallback(
     (trackId: string) => {
@@ -1093,7 +1168,7 @@ export default function App() {
         }
       }
     } else if (!isOffline && wasOffline) {
-      triggerOnlineBottomPopup('Back online');
+      triggerOnlineBottomPopup('back online');
       const qState = queueManager.getState();
       if (qState.tracks.length <= 1 && allFeedTracks.length > 0) {
         queueManager.setScopedQueue({
@@ -1113,7 +1188,7 @@ export default function App() {
     allFeedTracks,
   ]);
 
-  // Fetch Rich Live Discovery Feeds + YouTube Music-Style Dynamic Shelves
+  // fetch rich live discovery feeds & seasonal home shelves via itunes + apple rss + audius
   const loadDiscoveryFeeds = useCallback(
     async (forceRefresh = false) => {
       if (!activeAccount || !onboardingCompleted) return;
@@ -1150,7 +1225,7 @@ export default function App() {
             fetchRichItunesCatalog(),
             fetchAudiusTrending(20),
             fetchAppleCharts(),
-            fetchYouTubeMusicHomeShelves({
+            fetchAtherHomeShelves({
               followedArtists: musicProfile.followedArtists,
               topArtists: topArtistsFromProfile,
               topGenres: topGenresFromProfile,
@@ -1175,6 +1250,19 @@ export default function App() {
           setTrendingShelfTracks(shelves.trendingTracks);
           setNewReleaseTracks(shelves.newReleaseTracks);
           setNewReleaseAlbums(shelves.newReleaseAlbums);
+          if (shelves.dynamicCategories?.length) {
+            const rankedProfileCats = getRankedCategories(musicProfile).filter(
+              (c) => c !== 'all'
+            );
+            const mergedCats = Array.from(
+              new Set([
+                'all',
+                ...shelves.dynamicCategories.map((c) => c.toLowerCase()),
+                ...rankedProfileCats,
+              ])
+            ).slice(0, 9);
+            setHomeCategories(mergedCats);
+          }
           lastFeedFetchedAtRef.current = shelves.fetchedAt || Date.now();
         } else {
           lastFeedFetchedAtRef.current = Date.now();
@@ -1190,11 +1278,14 @@ export default function App() {
         );
 
         if (blended.length === 0) {
-          setFeedError('Unable to reach live music services right now.');
+          setFeedError('unable to reach live music services right now.');
           return;
         }
 
         registerTracks(blended);
+        if (shelves?.categoryTracksMap) {
+          registerTracks(Object.values(shelves.categoryTracksMap).flat());
+        }
         setAudiusTrendingTracks(audiusTracks);
         setChartSongTracks(chartSongs);
         setKnownAlbums([
@@ -1230,7 +1321,7 @@ export default function App() {
             }
             artistSeed.set(primaryArtist.toLowerCase(), {
               artist: primaryArtist,
-              subtitle: t.genre || t.category,
+              subtitle: (t.genre || t.category).toLowerCase(),
               artwork: pickGradientArtwork(primaryArtist),
               coverUrl: t.coverUrl,
             });
@@ -1238,36 +1329,36 @@ export default function App() {
           const initialArtists = Array.from(artistSeed.values());
           setFeaturedArtists(initialArtists);
 
-        void Promise.allSettled(
-          initialArtists.map((a) => fetchDeezerArtistJsonp(a.artist))
-        ).then((results) => {
-          if (seq !== feedSeqRef.current) return;
-          setFeaturedArtists((prev) =>
-            prev.map((item, idx) => {
-              const res = results[idx];
-              if (
-                res &&
-                res.status === 'fulfilled' &&
-                res.value &&
-                res.value.photoUrl
-              ) {
-                return {
-                  ...item,
-                  coverUrl: res.value.photoUrl,
-                };
-              }
-              return item;
-            })
-          );
-        });
-      }
-    } catch (err) {
-      if (seq !== feedSeqRef.current) return;
-      setFeedError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to load live music feeds.'
-      );
+          void Promise.allSettled(
+            initialArtists.map((a) => fetchDeezerArtistJsonp(a.artist))
+          ).then((results) => {
+            if (seq !== feedSeqRef.current) return;
+            setFeaturedArtists((prev) =>
+              prev.map((item, idx) => {
+                const res = results[idx];
+                if (
+                  res &&
+                  res.status === 'fulfilled' &&
+                  res.value &&
+                  res.value.photoUrl
+                ) {
+                  return {
+                    ...item,
+                    coverUrl: res.value.photoUrl,
+                  };
+                }
+                return item;
+              })
+            );
+          });
+        }
+      } catch (err) {
+        if (seq !== feedSeqRef.current) return;
+        setFeedError(
+          err instanceof Error
+            ? err.message.toLowerCase()
+            : 'failed to load live music feeds.'
+        );
       } finally {
         if (seq === feedSeqRef.current) {
           setFeedLoading(false);
@@ -1296,7 +1387,7 @@ export default function App() {
           topGenres: topGenresFromProfile,
           forceRefresh: true,
         }),
-        fetchYouTubeMusicHomeShelves({
+        fetchAtherHomeShelves({
           followedArtists: musicProfile.followedArtists,
           topArtists: topArtistsFromProfile,
           topGenres: topGenresFromProfile,
@@ -1377,8 +1468,9 @@ export default function App() {
 
   const handleSelectCategory = useCallback(
     async (category: string) => {
-      setSelectedCategory(category);
-      if (category === 'All') {
+      const normCat = category.trim().toLowerCase();
+      setSelectedCategory(normCat);
+      if (normCat === 'all') {
         if (allFeedTracks.length > 0) {
           setPopularTracks(allFeedTracks);
           setFeedError(null);
@@ -1386,6 +1478,15 @@ export default function App() {
         } else {
           await loadDiscoveryFeeds();
         }
+        return;
+      }
+
+      const prewarmed = getCachedCategorySongs(normCat);
+      if (prewarmed.length > 0) {
+        registerTracks(prewarmed);
+        setPopularTracks(prewarmed);
+        setFeedError(null);
+        setFeedLoading(false);
         return;
       }
 
@@ -1401,18 +1502,13 @@ export default function App() {
           ].map((a) => a.toLowerCase())
         );
 
-        const [ytRes, realRes, itunesRes, audiusRes] = await Promise.allSettled([
-          searchFreeYouTubeSongs(`${category} music`, {
-            maxResults: 18,
-            genreLabel: category,
-          }),
-          searchRealSongs(category, 40),
-          searchItunesTracks(category, 50),
-          searchAudiusTracks(category, 25),
+        const [realRes, itunesRes, audiusRes] = await Promise.allSettled([
+          searchRealSongs(normCat, 40),
+          searchItunesTracks(normCat, 50),
+          searchAudiusTracks(normCat, 25),
         ]);
         if (seq !== feedSeqRef.current) return;
 
-        const ytTracks = ytRes.status === 'fulfilled' ? ytRes.value : [];
         const realTracks =
           realRes.status === 'fulfilled' ? realRes.value : [];
         const itunesTracks =
@@ -1420,13 +1516,12 @@ export default function App() {
         const audiusTracks =
           audiusRes.status === 'fulfilled' ? audiusRes.value : [];
         const mergedRaw = mergeUniqueTracks(
-          ytTracks,
           realTracks,
           itunesTracks,
           audiusTracks
         );
         const filteredOfficial = mergedRaw.filter((t) =>
-          isOfficialArtistTrack(t, category)
+          isOfficialArtistTrack(t, normCat)
         );
         const candidates =
           filteredOfficial.length > 0 ? filteredOfficial : mergedRaw;
@@ -1451,8 +1546,8 @@ export default function App() {
         if (seq !== feedSeqRef.current) return;
         setFeedError(
           err instanceof Error
-            ? err.message
-            : `Failed to fetch ${category} tracks.`
+            ? err.message.toLowerCase()
+            : `failed to fetch ${normCat} tracks.`
         );
       } finally {
         if (seq === feedSeqRef.current) {
@@ -1493,19 +1588,37 @@ export default function App() {
     };
   }, [isOffline, silentRefreshTimeSyncedFeeds]);
 
-  // Automatic Background Full-Track Upgrade Resolver
+  // automatic background full-track resolver via SimpMusic InnerTube + fallbacks
   const ensureFullTrack = useCallback(
     async (track: ShowcaseTrack): Promise<ShowcaseTrack> => {
-      if (track.streamStatus === 'full' && (track.youtubeVideoId || track.streamUrl)) {
+      if (
+        track.streamStatus === 'full' &&
+        track.streamUrl &&
+        track.streamSource !== 'itunes-preview'
+      ) {
         return track;
       }
       if (isOffline) return track;
 
-      const ytUpgraded = await resolveFullYouTubeTrack(track);
-      const resolved =
-        ytUpgraded.youtubeVideoId || ytUpgraded.streamStatus === 'full'
-          ? ytUpgraded
-          : await resolveFullAudiusTrack(ytUpgraded);
+      const stream = await resolveFullAudioStream(track, effectiveStreamQuality);
+      if (!stream) return track;
+
+      const resolved: ShowcaseTrack = {
+        ...track,
+        streamUrl: stream.streamUrl,
+        streamSource: stream.source,
+        streamStatus:
+          stream.source !== 'itunes-preview'
+            ? 'full'
+            : track.previewUrl
+            ? 'preview-only'
+            : 'unresolved',
+        duration:
+          stream.durationSec > 0
+            ? Math.max(track.duration, stream.durationSec)
+            : track.duration,
+        isAudius: stream.source === 'audius' ? true : track.isAudius,
+      };
       registerTracks([resolved]);
       queueManager.syncTrackMetadata(resolved);
       setDownloadedTracksMap((prev) =>
@@ -1513,7 +1626,7 @@ export default function App() {
       );
       return resolved;
     },
-    [isOffline, registerTracks]
+    [isOffline, effectiveStreamQuality, registerTracks]
   );
 
   const fetchAiRecommendations = useCallback(async () => {
@@ -1545,7 +1658,7 @@ export default function App() {
       });
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        setAiRecError('AI recommendations require the hosted backend server.');
+        setAiRecError('ai recommendations require the hosted backend server.');
         return;
       }
       const data = (await response.json()) as {
@@ -1554,18 +1667,18 @@ export default function App() {
         error?: string;
       };
       if (!response.ok) {
-        setAiRecError(data.error ?? 'Failed to fetch AI recommendations.');
+        setAiRecError((data.error ?? 'failed to fetch ai recommendations.').toLowerCase());
         return;
       }
-      setAiRecHeadline(data.headline ?? 'AI Recommendations');
+      setAiRecHeadline((data.headline ?? 'ai recommendations').toLowerCase());
       setAiRecommendations(
         Array.isArray(data.recommendations) ? data.recommendations : []
       );
     } catch (error) {
       setAiRecError(
         error instanceof Error
-          ? error.message
-          : 'Unable to reach AI recommendations service.'
+          ? error.message.toLowerCase()
+          : 'unable to reach ai recommendations service.'
       );
     } finally {
       setAiRecLoading(false);
@@ -1634,9 +1747,9 @@ export default function App() {
             catalog: liveCatalog,
           }),
         });
-        const contentType = response.headers.get('content-type') || '';
+      const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-          setAiShuffleError('AI Smart Shuffle requires the hosted backend server.');
+          setAiShuffleError('ai smart shuffle requires the hosted backend server.');
           setAiShuffleNote(null);
           return;
         }
@@ -1646,7 +1759,7 @@ export default function App() {
           error?: string;
         };
         if (!response.ok) {
-          setAiShuffleError(data.error ?? 'AI Smart Shuffle failed.');
+          setAiShuffleError((data.error ?? 'ai smart shuffle failed.').toLowerCase());
           setAiShuffleNote(null);
           return;
         }
@@ -1660,13 +1773,13 @@ export default function App() {
           if (orderedTracks.length > 0) {
             queueManager.replaceUpcoming(orderedTracks);
           }
-          setAiShuffleNote(data.note ?? 'AI Smart Shuffle sequenced your queue');
+          setAiShuffleNote((data.note ?? 'ai smart shuffle sequenced your queue').toLowerCase());
         }
       } catch (error) {
         setAiShuffleError(
           error instanceof Error
-            ? error.message
-            : 'Unable to reach AI Smart Shuffle service.'
+            ? error.message.toLowerCase()
+            : 'unable to reach ai smart shuffle service.'
         );
       } finally {
         setAiShuffleLoading(false);
@@ -1705,8 +1818,8 @@ export default function App() {
       setCurrentTime(seekTo ?? 0);
       void audioEngine.playTrack(track, seekTo ?? 0);
 
-      // Background metadata hydration for smoother instant skips
-      if (!track.youtubeVideoId && !isOffline) {
+      // background full-stream hydration for smoother playback & instant skips
+      if (track.streamStatus !== 'full' && !isOffline) {
         void ensureFullTrack(track);
       }
     },
@@ -1768,7 +1881,7 @@ export default function App() {
         return;
       }
 
-      const next = queueManager.resolveNextTrack(allFeedTracks, false);
+      const next = queueManager.resolveNextTrack(playableFeedTracks, false);
       if (next) {
         if (isOffline && !downloadedIds.has(next.id)) {
           audioEngine.pause();
@@ -1786,13 +1899,13 @@ export default function App() {
       }
 
       // Optional general discovery autoplay when queue ends
-      const nextFallback = allFeedTracks.find((t) => t.id !== activeTrackIdRef.current);
+      const nextFallback = playableFeedTracks.find((t) => t.id !== activeTrackIdRef.current);
       if (nextFallback && !isOffline) {
         queueManager.setScopedQueue({
           scope: 'general',
           contextId: null,
-          tracks: allFeedTracks,
-          startIndex: allFeedTracks.findIndex((t) => t.id === nextFallback.id),
+          tracks: playableFeedTracks,
+          startIndex: playableFeedTracks.findIndex((t) => t.id === nextFallback.id),
         });
         playResolvedTrack(nextFallback, 0, false);
       } else {
@@ -1803,18 +1916,18 @@ export default function App() {
     return () => {
       audioEngine.setOnEnded(null);
     };
-  }, [allFeedTracks, autoplay, downloadedIds, isOffline, playResolvedTrack]);
+  }, [playableFeedTracks, autoplay, downloadedIds, isOffline, playResolvedTrack]);
 
   const handleTogglePlay = useCallback(() => {
     if (!currentTrackId) {
-      const firstTrack = allFeedTracks[0] ?? Object.values(tracksByIdRef.current)[0];
+      const firstTrack = playableFeedTracks[0] ?? Object.values(tracksByIdRef.current).find((t) => explicitAllowed || !t.explicit);
       if (firstTrack) {
         queueManager.setScopedQueue({
           scope: 'general',
           contextId: null,
           tracks: [
             firstTrack,
-            ...allFeedTracks.filter((t) => t.id !== firstTrack.id),
+            ...playableFeedTracks.filter((t) => t.id !== firstTrack.id),
           ],
           startIndex: 0,
         });
@@ -1839,7 +1952,7 @@ export default function App() {
           playResolvedTrack(found, 0, false);
         }
       } else {
-        showOfflineNotice('No downloaded tracks available offline');
+        showOfflineNotice('no downloaded tracks available offline');
       }
       return;
     }
@@ -1863,7 +1976,8 @@ export default function App() {
     downloadedTracksMap,
     currentTrackId,
     currentTime,
-    allFeedTracks,
+    playableFeedTracks,
+    explicitAllowed,
     playResolvedTrack,
     showOfflineNotice,
   ]);
@@ -1876,12 +1990,15 @@ export default function App() {
       startIndex = 0,
       openPlayer = true
     ) => {
+      const explicitSafe = filterExplicitTracks(tracks);
       const filtered = isOffline
-        ? tracks.filter((t) => downloadedIds.has(t.id))
-        : tracks;
+        ? explicitSafe.filter((t) => downloadedIds.has(t.id))
+        : explicitSafe;
       if (filtered.length === 0) {
         if (isOffline) {
-          showOfflineNotice('Unavailable offline — saved downloads only');
+          showOfflineNotice('unavailable offline — saved downloads only');
+        } else if (!explicitAllowed && tracks.length > 0) {
+          showOfflineNotice('explicit content blocked in settings');
         }
         return;
       }
@@ -1904,6 +2021,8 @@ export default function App() {
       }
     },
     [
+      filterExplicitTracks,
+      explicitAllowed,
       isOffline,
       downloadedIds,
       registerTracks,
@@ -1924,8 +2043,13 @@ export default function App() {
           : trackOrId;
       if (!targetTrack) return;
 
+      if (!explicitAllowed && targetTrack.explicit) {
+        showOfflineNotice('explicit content blocked in settings');
+        return;
+      }
+
       if (isOffline && !downloadedIds.has(targetTrack.id)) {
-        showOfflineNotice('Unavailable offline — saved downloads only');
+        showOfflineNotice('unavailable offline — saved downloads only');
         return;
       }
 
@@ -1952,7 +2076,7 @@ export default function App() {
           contextId: null,
           tracks: [
             targetTrack,
-            ...allFeedTracks.filter((t) => t.id !== targetTrack.id),
+            ...playableFeedTracks.filter((t) => t.id !== targetTrack.id),
           ],
           startIndex: 0,
         });
@@ -1964,10 +2088,11 @@ export default function App() {
       currentTrackId,
       isPlaying,
       openPlayerOnTap,
+      explicitAllowed,
       isOffline,
       downloadedIds,
       downloadedTracksMap,
-      allFeedTracks,
+      playableFeedTracks,
       showOfflineNotice,
       playResolvedTrack,
     ]
@@ -1997,7 +2122,7 @@ export default function App() {
         : trackIds;
       if (playableIds.length === 0) {
         if (isOffline) {
-          showOfflineNotice('Unavailable offline — saved downloads only');
+          showOfflineNotice('unavailable offline — saved downloads only');
         }
         return;
       }
@@ -2043,7 +2168,7 @@ export default function App() {
       const candidateIds =
         qTracks.length > 1
           ? qTracks.map((t) => t.id)
-          : allFeedTracks.map((t) => t.id);
+          : playableFeedTracks.map((t) => t.id);
       void runAiSmartShuffle(candidateIds, currentTrackId ?? undefined);
     } else if (!next) {
       setAiShuffleNote(null);
@@ -2052,7 +2177,7 @@ export default function App() {
   }, [
     aiSettings.smartShuffle,
     isOffline,
-    allFeedTracks,
+    playableFeedTracks,
     currentTrackId,
     runAiSmartShuffle,
   ]);
@@ -2099,7 +2224,7 @@ export default function App() {
       topGenres: Array.from(
         new Set([
           ...(profile.onboardingGenres ?? []),
-          ...homeCategories.filter((c) => c !== 'All'),
+          ...homeCategories.filter((c) => c.toLowerCase() !== 'all'),
         ])
       ).slice(0, 8),
       followedArtists: Array.from(
@@ -2147,17 +2272,17 @@ export default function App() {
   }, []);
 
   const handleResetQueue = useCallback(() => {
-    if (allFeedTracks.length === 0) return;
+    if (playableFeedTracks.length === 0) return;
     const idx = currentTrackId
-      ? Math.max(0, allFeedTracks.findIndex((t) => t.id === currentTrackId))
+      ? Math.max(0, playableFeedTracks.findIndex((t) => t.id === currentTrackId))
       : 0;
     queueManager.setScopedQueue({
       scope: 'general',
       contextId: null,
-      tracks: allFeedTracks,
+      tracks: playableFeedTracks,
       startIndex: idx,
     });
-  }, [allFeedTracks, currentTrackId]);
+  }, [playableFeedTracks, currentTrackId]);
 
   const handleToggleDownload = useCallback(
     async (trackOrId: string | ShowcaseTrack) => {
@@ -2178,11 +2303,46 @@ export default function App() {
         return;
       }
 
+      if (isOffline) {
+        showOfflineNotice('connect to internet to download songs');
+        return;
+      }
+
+      const connType =
+        typeof navigator !== 'undefined'
+          ? ((navigator as unknown as { connection?: { type?: string } }).connection?.type ?? '')
+          : '';
+      if (!downloadOverCellular && connType === 'cellular') {
+        showOfflineNotice('cellular downloads disabled in settings');
+        return;
+      }
+
       const resolved = await ensureFullTrack(track);
-      setDownloadedTracksMap((prev) => ({ ...prev, [resolved.id]: resolved }));
-      void saveTrackOffline(resolved, accountScopeUid);
+      if (
+        resolved.streamStatus !== 'full' ||
+        !resolved.streamUrl ||
+        resolved.streamSource === 'itunes-preview'
+      ) {
+        showOfflineNotice('full track stream unavailable for download');
+        return;
+      }
+
+      const res = await saveTrackOffline(resolved, accountScopeUid, downloadQuality);
+      if (res.ok) {
+        setDownloadedTracksMap((prev) => ({ ...prev, [resolved.id]: { ...resolved } }));
+      } else {
+        showOfflineNotice(res.error || 'download failed');
+      }
     },
-    [activeAccount, downloadedTracksMap, ensureFullTrack]
+    [
+      activeAccount,
+      downloadedTracksMap,
+      isOffline,
+      downloadOverCellular,
+      downloadQuality,
+      ensureFullTrack,
+      showOfflineNotice,
+    ]
   );
 
   const handleToggleFavorite = useCallback(
@@ -2230,7 +2390,7 @@ export default function App() {
         name,
         description,
         trackIds,
-        updatedAt: 'Updated just now',
+        updatedAt: 'updated just now',
         updatedAtMs: Date.now(),
         coverArtwork: cover?.coverArtwork,
         coverImageUrl: cover?.coverImageUrl,
@@ -2259,7 +2419,7 @@ export default function App() {
             ? {
                 ...pl,
                 ...updates,
-                updatedAt: 'Updated just now',
+                updatedAt: 'updated just now',
                 updatedAtMs: Date.now(),
               }
             : pl
@@ -2293,7 +2453,7 @@ export default function App() {
             ? {
                 ...pl,
                 trackIds: [...pl.trackIds, resolved.id],
-                updatedAt: 'Updated just now',
+                updatedAt: 'updated just now',
                 updatedAtMs: Date.now(),
               }
             : pl
@@ -2430,7 +2590,7 @@ export default function App() {
       }
 
       const nextProfile = readAccountJson('profile', getDefaultProfile(acct), acctId);
-      setDisplayName(nextProfile.displayName || 'Listener');
+      setDisplayName(nextProfile.displayName || 'listener');
       setHandle(nextProfile.handle || '@listener');
       setEmail(acct.provider === 'guest' ? '' : nextProfile.email || '');
       setProfileImageUrl(nextProfile.profileImageUrl ?? null);
@@ -2452,6 +2612,18 @@ export default function App() {
       setTrackActivity(nextPrefs.trackActivity ?? true);
       setPrivateSession(nextPrefs.privateSession ?? false);
       setAutoDownloadFavorites(nextPrefs.autoDownloadFavorites ?? false);
+      setWifiQuality((nextPrefs.wifiQuality as AudioQualityTier) ?? 'High');
+      setCellularQuality((nextPrefs.cellularQuality as AudioQualityTier) ?? 'Normal');
+      setDownloadQuality((nextPrefs.downloadQuality as AudioQualityTier) ?? 'High');
+      setLosslessSpatial(nextPrefs.losslessSpatial ?? true);
+      setVolumeNormalization(nextPrefs.volumeNormalization ?? true);
+      setMonoAudio(nextPrefs.monoAudio ?? false);
+      setDataSaver(nextPrefs.dataSaver ?? false);
+      setDownloadOverCellular(nextPrefs.downloadOverCellular ?? false);
+      setLanguage((nextPrefs.language || 'english (us)').toLowerCase());
+      setNotifyNewReleases(nextPrefs.notifyNewReleases ?? true);
+      setNotifyMixUpdates(nextPrefs.notifyMixUpdates ?? true);
+      setNotifyAppUpdates(nextPrefs.notifyAppUpdates ?? false);
 
       const nextAiDefaults = getDefaultAiSettings();
       const nextAi = readAccountJson<
@@ -2683,6 +2855,18 @@ export default function App() {
     trackActivity,
     privateSession,
     autoDownloadFavorites,
+    wifiQuality,
+    cellularQuality,
+    downloadQuality,
+    losslessSpatial,
+    volumeNormalization,
+    monoAudio,
+    dataSaver,
+    downloadOverCellular,
+    language,
+    notifyNewReleases,
+    notifyMixUpdates,
+    notifyAppUpdates,
   ]);
 
   // Listen for mutations from secondary modules (e.g. tasteProfile, SearchScreen) to auto-sync
@@ -2834,17 +3018,20 @@ export default function App() {
 
   const handleTransferPlaybackToDevice = useCallback(
     async (device: RegisteredDevice) => {
-      if (!verifiedUid || !currentTrack) return;
-      const pos = audioEngine.getCurrentTime();
+      const targetTrack = currentTrack ?? sharedPlayback?.track;
+      if (!verifiedUid || !targetTrack) return;
+      const pos = currentTrack
+        ? audioEngine.getCurrentTime()
+        : computeExactPositionSec(sharedPlayback);
       audioEngine.pause();
       await transferPlaybackToDevice(verifiedUid, device.id, device.name, {
-        track: currentTrack,
+        track: targetTrack,
         isPlaying: true,
         positionSec: pos,
-        durationSec: effectiveDuration,
+        durationSec: targetTrack.duration || effectiveDuration,
       });
     },
-    [verifiedUid, currentTrack, effectiveDuration]
+    [verifiedUid, currentTrack, sharedPlayback, effectiveDuration]
   );
 
   const handleSendRemoteCommand = useCallback(
@@ -2874,10 +3061,10 @@ export default function App() {
     !selectedArtist;
 
   useEffect(() => {
-    if (isReelsView) {
+    if (isReelsView && reelsAutoPauseMusic) {
       audioEngine.pause();
     }
-  }, [isReelsView]);
+  }, [isReelsView, reelsAutoPauseMusic]);
 
   if (authTransition) {
     return (
@@ -2924,6 +3111,45 @@ export default function App() {
     );
   }
 
+  if (!showSetupTransition && feedLoading && allFeedTracks.length === 0 && !isOffline && !feedError) {
+    return (
+      <div className="fixed inset-0 h-[100dvh] z-40 bg-black text-white flex flex-col items-center justify-center px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+        <div className="flex flex-col items-center gap-5 max-w-xs w-full text-center">
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0.8 }}
+            animate={{ scale: [0.96, 1.04, 0.96], opacity: 1 }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+            className="ather-depth-card w-16 h-16 rounded-2xl flex items-center justify-center"
+          >
+            <AtherLogoMark className="w-11 h-11 rounded-xl" />
+          </motion.div>
+          <div className="space-y-1.5">
+            <h1 className="text-xl font-black tracking-tight text-white">Ather</h1>
+            <p className="text-xs font-bold text-[#A1A1AA]">loading your music...</p>
+          </div>
+          <div className="w-40 h-1.5 rounded-full bg-[#141418] border border-[#242429] overflow-hidden">
+            <motion.div
+              className="h-full w-1/2 rounded-full bg-white"
+              animate={{ x: ['-100%', '200%'] }}
+              transition={{ repeat: Infinity, duration: 1.25, ease: 'easeInOut' }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const scheduleImmediateCloudSync = () => {
+    if (verifiedUid && activeAccount?.provider === 'google') {
+      cloudSync.schedulePush(verifiedUid, activeAccount.id, true);
+    }
+  };
+
+  const activeNavIdx = Math.max(
+    0,
+    NAV_ITEMS.findIndex((i) => i.id === activeTab)
+  );
+
   return (
     <div className="relative w-full h-[100dvh] bg-black text-white overflow-hidden flex flex-col">
       {showSetupTransition && (
@@ -2935,23 +3161,10 @@ export default function App() {
         />
       )}
 
-      {/* Subtle Monochrome Studio Glow */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(circle at 20% 10%, rgba(255,255,255,0.03) 0%, transparent 48%)',
-        }}
-      />
-
-      {/* Upper Menu Bar */}
+      {/* upper menu bar */}
       {!isReelsView && (
         <header className="fixed top-0 left-0 right-0 z-30 w-full pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] pointer-events-none">
-          <div
-            style={{ backgroundColor: `rgba(14, 14, 17, ${Math.max(0.95, lookPrefs.glassOpacity)})` }}
-            className="pointer-events-auto max-w-[1120px] mx-auto rounded-full backdrop-blur-xl border border-white/25 px-4 sm:px-5 h-14 flex items-center justify-between shadow-[0_12px_32px_rgba(0,0,0,0.85)]"
-          >
+          <div className="ather-depth-bar pointer-events-auto max-w-[1120px] mx-auto rounded-full px-4 sm:px-5 h-14 flex items-center justify-between">
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
@@ -2964,14 +3177,14 @@ export default function App() {
               }}
               className="pl-0.5 flex items-center gap-2.5 text-lg sm:text-xl font-black tracking-tight text-white hover:opacity-85 transition-opacity"
             >
-              <AtherLogoMark className="w-7 h-7 rounded-lg border border-white/25" />
-              <span>ATHER</span>
+              <AtherLogoMark className="w-7 h-7 rounded-lg border border-[#242429]" />
+              <span>Ather</span>
             </motion.button>
 
             <div className="flex items-center gap-2">
               <motion.button
                 type="button"
-                aria-label="Open profile"
+                aria-label="open profile"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
                 transition={{ type: 'spring', stiffness: 460, damping: 24 }}
@@ -2982,7 +3195,7 @@ export default function App() {
                   setSelectedShelf(null);
                   setActiveTab('profile');
                 }}
-                className="w-9 h-9 rounded-full overflow-hidden border border-white/35 bg-[#1C1C1F] hover:border-white/75 transition-colors shrink-0 shadow-md"
+                className="ather-depth-btn w-9 h-9 rounded-full overflow-hidden shrink-0"
               >
                 <ProfileAvatar
                   displayName={displayName}
@@ -3008,7 +3221,7 @@ export default function App() {
           <ReelsScreen
             playlists={playlists}
             allTracks={allTracks}
-            reelsTracks={reelsTracks}
+            reelsTracks={visibleReelsTracks}
             resolveTrack={resolveTrack}
             downloadedIds={downloadedIds}
             feedLoading={feedLoading}
@@ -3135,7 +3348,7 @@ export default function App() {
                 isPlaying={isPlaying}
                 isOffline={isOffline}
                 categories={homeCategories}
-                popularTracks={popularTracks}
+                popularTracks={visiblePopularTracks}
                 featuredArtists={featuredArtists}
                 collections={collections}
                 forYouCards={forYouCards}
@@ -3218,8 +3431,6 @@ export default function App() {
                 authUid={verifiedUid}
                 authEmail={verifiedAuthEmail}
                 accountProvider={activeAccount.provider}
-                syncStatus={syncStatus}
-                onSyncNow={() => cloudSync.flushPush(true)}
                 accountDeviceCount={accountDevices.length}
                 onOpenDevices={() => setSettingsDevicesOpen(true)}
                 onSignInGoogle={async () => {
@@ -3229,7 +3440,7 @@ export default function App() {
                     provider: 'google',
                     uid: user.uid,
                     displayName:
-                      user.displayName || user.email?.split('@')[0] || 'ATHER Listener',
+                      user.displayName || user.email?.split('@')[0] || 'ather listener',
                     email: user.email || '',
                     photoUrl: user.photoURL || undefined,
                   };
@@ -3273,6 +3484,7 @@ export default function App() {
                   setEmail(activeAccount.provider === 'guest' ? '' : nextEmail);
                   setProfileImageUrl(nextImg);
                   setAvatarPreset(nextPreset);
+                  scheduleImmediateCloudSync();
                 }}
                 downloadedCount={downloadedIds.size}
                 playlistCount={playlists.length}
@@ -3282,87 +3494,175 @@ export default function App() {
                 onToggleAutoplay={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setAutoplay((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 showLyricsEnabled={showLyricsEnabled}
                 onToggleShowLyrics={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setShowLyricsEnabled((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 explicitAllowed={explicitAllowed}
                 onToggleExplicit={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setExplicitAllowed((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 crossfadeSeconds={crossfadeSeconds}
                 onChangeCrossfade={(secs) => {
                   touchSyncSection('preferences', activeAccount.id);
                   setCrossfadeSeconds(secs);
+                  scheduleImmediateCloudSync();
                 }}
                 gaplessPlayback={gaplessPlayback}
                 onToggleGapless={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setGaplessPlayback((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 openPlayerOnTap={openPlayerOnTap}
                 onToggleOpenPlayerOnTap={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setOpenPlayerOnTap((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 hapticsEnabled={hapticsEnabled}
                 onToggleHaptics={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setHapticsEnabled((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 miniSwipeEnabled={miniSwipeEnabled}
                 onToggleMiniSwipe={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setMiniSwipeEnabled((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 lyricsGlowEnabled={lyricsGlowEnabled}
                 onToggleLyricsGlow={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setLyricsGlowEnabled((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 reelsAutoScroll={reelsAutoScroll}
                 onToggleReelsAutoScroll={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setReelsAutoScroll((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 reelsDurationSeconds={reelsDurationSeconds}
                 onChangeReelsDuration={(secs) => {
                   touchSyncSection('preferences', activeAccount.id);
                   setReelsDurationSeconds(secs);
+                  scheduleImmediateCloudSync();
                 }}
                 reelsAutoPauseMusic={reelsAutoPauseMusic}
                 onToggleReelsAutoPauseMusic={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setReelsAutoPauseMusic((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 trackActivity={trackActivity}
                 onToggleTrackActivity={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setTrackActivity((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 privateSession={privateSession}
                 onTogglePrivateSession={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setPrivateSession((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 onClearRecentHistory={() => {
                   recordHistoryCleared(activeAccount.id);
                   setRecentTrackIds([]);
                   setPlayHistory([]);
+                  scheduleImmediateCloudSync();
                 }}
                 autoDownloadFavorites={autoDownloadFavorites}
                 onToggleAutoDownloadFavorites={() => {
                   touchSyncSection('preferences', activeAccount.id);
                   setAutoDownloadFavorites((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 onClearAllDownloads={() => {
                   setDownloadedTracksMap({});
                   void clearAllOfflineTrackBlobs(
                     getCanonicalAccountScopeId(activeAccount)
                   );
+                }}
+                wifiQuality={wifiQuality}
+                onChangeWifiQuality={(tier) => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setWifiQuality(tier);
+                  scheduleImmediateCloudSync();
+                }}
+                cellularQuality={cellularQuality}
+                onChangeCellularQuality={(tier) => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setCellularQuality(tier);
+                  scheduleImmediateCloudSync();
+                }}
+                downloadQuality={downloadQuality}
+                onChangeDownloadQuality={(tier) => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setDownloadQuality(tier);
+                  scheduleImmediateCloudSync();
+                }}
+                losslessSpatial={losslessSpatial}
+                onToggleLosslessSpatial={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setLosslessSpatial((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                volumeNormalization={volumeNormalization}
+                onToggleVolumeNormalization={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setVolumeNormalization((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                monoAudio={monoAudio}
+                onToggleMonoAudio={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setMonoAudio((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                dataSaver={dataSaver}
+                onToggleDataSaver={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setDataSaver((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                downloadOverCellular={downloadOverCellular}
+                onToggleDownloadOverCellular={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setDownloadOverCellular((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                language={language}
+                onChangeLanguage={(lang) => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setLanguage(lang.toLowerCase());
+                  scheduleImmediateCloudSync();
+                }}
+                notifyNewReleases={notifyNewReleases}
+                onToggleNotifyNewReleases={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setNotifyNewReleases((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                notifyMixUpdates={notifyMixUpdates}
+                onToggleNotifyMixUpdates={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setNotifyMixUpdates((v) => !v);
+                  scheduleImmediateCloudSync();
+                }}
+                notifyAppUpdates={notifyAppUpdates}
+                onToggleNotifyAppUpdates={() => {
+                  touchSyncSection('preferences', activeAccount.id);
+                  setNotifyAppUpdates((v) => !v);
+                  scheduleImmediateCloudSync();
                 }}
                 sleepTimerRemainingSeconds={sleepTimerRemainingSeconds}
                 sleepTimerEndOfTrack={sleepTimerEndOfTrack}
@@ -3390,6 +3690,7 @@ export default function App() {
                     preset,
                     bands: [...EQ_PRESET_VALUES[preset]],
                   });
+                  scheduleImmediateCloudSync();
                 }}
                 onChangeEqBand={(index, value) => {
                   touchSyncSection('eq', activeAccount.id);
@@ -3397,6 +3698,7 @@ export default function App() {
                     preset: 'Custom',
                     bands: prev.bands.map((v, i) => (i === index ? value : v)),
                   }));
+                  scheduleImmediateCloudSync();
                 }}
                 aiSmartShuffleEnabled={aiSettings.smartShuffle}
                 onToggleAiSmartShuffle={() => {
@@ -3405,6 +3707,7 @@ export default function App() {
                     ...prev,
                     smartShuffle: !prev.smartShuffle,
                   }));
+                  scheduleImmediateCloudSync();
                 }}
                 aiRecommendationsEnabled={aiSettings.recommendations}
                 onToggleAiRecommendations={() => {
@@ -3413,6 +3716,7 @@ export default function App() {
                     ...prev,
                     recommendations: !prev.recommendations,
                   }));
+                  scheduleImmediateCloudSync();
                 }}
                 aiDiscoveryLevel={aiSettings.discoveryLevel}
                 onChangeAiDiscoveryLevel={(level) => {
@@ -3421,6 +3725,7 @@ export default function App() {
                     ...prev,
                     discoveryLevel: level,
                   }));
+                  scheduleImmediateCloudSync();
                 }}
                 aiRecLoading={aiRecLoading}
                 aiRecHeadline={aiRecHeadline}
@@ -3482,7 +3787,7 @@ export default function App() {
         className="fixed bottom-0 left-0 right-0 z-30 flex flex-col items-center gap-2 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none"
       >
         {offlineNotice && (
-          <div className="pointer-events-auto max-w-md w-full rounded-full bg-white text-black px-4 py-2 flex items-center justify-between gap-2 text-xs font-extrabold shadow-[0_10px_28px_rgba(0,0,0,0.75)]">
+          <div className="pointer-events-auto max-w-md w-full rounded-full bg-white text-black border border-[#242429] px-4 py-2 flex items-center justify-between gap-2 text-xs font-extrabold">
             <span className="flex items-center gap-2 truncate">
               <WifiOffGlyph className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">{offlineNotice}</span>
@@ -3496,7 +3801,7 @@ export default function App() {
               }}
               className="underline shrink-0"
             >
-              Downloads
+              downloads
             </button>
           </div>
         )}
@@ -3507,8 +3812,8 @@ export default function App() {
             <div
               role="button"
               tabIndex={0}
-              aria-label={`Now playing: ${currentTrack.title} by ${currentTrack.artist}. Open player.${
-                !isPlaying ? ' Swipe horizontally to dismiss.' : ''
+              aria-label={`now playing: ${currentTrack.title.toLowerCase()} by ${currentTrack.artist.toLowerCase()}. open player.${
+                !isPlaying ? ' swipe horizontally to dismiss.' : ''
               }`}
               onPointerDown={(e) => {
                 if (isPlaying || !miniSwipeEnabled) return;
@@ -3589,16 +3894,15 @@ export default function App() {
                 }
               }}
               style={{
-                backgroundColor: `rgba(14, 14, 17, ${Math.max(0.95, lookPrefs.glassOpacity)})`,
                 transform: `translate3d(${miniDragX}px, 0, 0)`,
                 opacity: Math.max(0, 1 - Math.abs(miniDragX) / 260),
                 transition: isDraggingMini
                   ? 'none'
                   : 'transform 0.28s cubic-bezier(0.32, 1.28, 0.36, 1), opacity 0.2s ease',
               }}
-              className={`pointer-events-auto relative overflow-hidden max-w-md w-full rounded-full backdrop-blur-xl border border-white/25 px-3 ${
+              className={`ather-depth-bar pointer-events-auto relative overflow-hidden max-w-md w-full rounded-full px-3 ${
                 lookPrefs.compactTiles ? 'py-2' : 'py-2.5'
-              } flex items-center gap-3 cursor-pointer shadow-[0_14px_34px_rgba(0,0,0,0.85)] hover:border-white/40 active:scale-[0.99] select-none ${
+              } flex items-center gap-3 cursor-pointer active:scale-[0.99] select-none ${
                 !isPlaying ? 'touch-pan-y' : ''
               }`}
             >
@@ -3607,7 +3911,7 @@ export default function App() {
                 initial={{ scale: 0.9 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 24 }}
-                className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-white/20"
+                className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-[#242429]"
               >
                 <ShowcaseArtwork
                   style={currentTrack.artwork}
@@ -3621,7 +3925,7 @@ export default function App() {
 
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-extrabold text-white truncate leading-tight">
-                  {currentTrack.title}
+                  {currentTrack.title.toLowerCase()}
                 </div>
                 <button
                   type="button"
@@ -3629,16 +3933,16 @@ export default function App() {
                     e.stopPropagation();
                     handleOpenArtist(currentTrack.artist);
                   }}
-                  className="block max-w-full text-[11px] font-bold text-white/75 hover:text-white hover:underline truncate mt-0.5 leading-tight text-left transition-colors"
+                  className="block max-w-full text-[11px] font-bold text-[#A1A1AA] hover:text-white hover:underline truncate mt-0.5 leading-tight text-left transition-colors"
                 >
-                  {currentTrack.artist}
+                  {currentTrack.artist.toLowerCase()}
                 </button>
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
                 <motion.button
                   type="button"
-                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  aria-label={isPlaying ? 'pause' : 'play'}
                   whileHover={{ scale: 1.07 }}
                   whileTap={{ scale: 0.84 }}
                   transition={{ type: 'spring', stiffness: 520, damping: 22 }}
@@ -3646,7 +3950,7 @@ export default function App() {
                     e.stopPropagation();
                     handleTogglePlay();
                   }}
-                  className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.22)]"
+                  className="ather-acid-btn w-10 h-10 rounded-full flex items-center justify-center"
                 >
                   {isPlaying ? (
                     <PauseGlyph className="w-4 h-4" />
@@ -3657,7 +3961,7 @@ export default function App() {
 
                 <motion.button
                   type="button"
-                  aria-label="Next track"
+                  aria-label="next track"
                   whileHover={{ scale: 1.07 }}
                   whileTap={{ scale: 0.84 }}
                   transition={{ type: 'spring', stiffness: 520, damping: 22 }}
@@ -3665,16 +3969,16 @@ export default function App() {
                     e.stopPropagation();
                     handleNextTrack();
                   }}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-[#A1A1AA] hover:text-white hover:bg-[#141418] transition-colors"
                 >
                   <NextGlyph className="w-4 h-4" />
                 </motion.button>
               </div>
 
-              {/* 2px Monochrome Hairline Progress Bar */}
+              {/* 2px White Hairline Progress Bar */}
               <div
                 aria-hidden="true"
-                className="absolute bottom-0 left-4 right-4 h-[2px] bg-white/12 rounded-full overflow-hidden pointer-events-none"
+                className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#141418] rounded-full overflow-hidden pointer-events-none"
               >
                 <div
                   className="h-full bg-white rounded-full transition-[width] duration-200 linear"
@@ -3693,13 +3997,13 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.96 }}
               transition={{ duration: 0.22 }}
-              className="pointer-events-auto max-w-[480px] w-full rounded-full bg-[#111114] border border-white/25 px-4 py-1.5 flex items-center justify-between gap-2 text-[11px] font-extrabold text-white shadow-[0_10px_28px_rgba(0,0,0,0.85)]"
+              className="ather-depth-pill pointer-events-auto max-w-[480px] w-full rounded-full px-4 py-1.5 flex items-center justify-between gap-2 text-[11px] font-extrabold text-white"
             >
               <span className="flex items-center gap-2 min-w-0 truncate">
-                <AiSparklesGlyph className="w-3.5 h-3.5 shrink-0" active={true} />
+                <AiSparklesGlyph className="w-3.5 h-3.5 shrink-0 text-white" active={true} />
                 <span className="truncate">
                   {aiShuffleLoading
-                    ? 'Sequencing queue with AI Smart Shuffle...'
+                    ? 'sequencing queue with ai smart shuffle...'
                     : aiShuffleError}
                 </span>
               </span>
@@ -3707,16 +4011,16 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAiShuffleError(null)}
-                  className="underline shrink-0 text-white/75 hover:text-white"
+                  className="underline shrink-0 text-white hover:text-[#A1A1AA]"
                 >
-                  Dismiss
+                  dismiss
                 </button>
               )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Online / Offline Connectivity Indicator */}
+        {/* online / offline connectivity indicator */}
         <AnimatePresence>
           {(isOffline || onlinePopupVisible) && !isReelsView && (
             <motion.div
@@ -3727,24 +4031,24 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 14, scale: 0.97 }}
               transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-              className={`pointer-events-auto max-w-[480px] w-full rounded-2xl px-4 py-2 flex items-center justify-between gap-3 text-xs font-extrabold border shadow-[0_12px_32px_rgba(0,0,0,0.85)] ${
+              className={`pointer-events-auto max-w-[480px] w-full rounded-2xl px-4 py-2 flex items-center justify-between gap-3 text-xs font-extrabold border ${
                 !isOffline
-                  ? 'bg-white text-black border-white'
-                  : 'bg-[#111114] text-white border-white/25'
+                  ? 'bg-white text-black border-[#242429]'
+                  : 'bg-[#141418] text-white border-[#2A2A32]'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {!isOffline ? (
                   <WifiOnGlyph className="w-4 h-4 shrink-0" />
                 ) : (
-                  <WifiOffGlyph className="w-4 h-4 text-white/85 shrink-0" />
+                  <WifiOffGlyph className="w-4 h-4 text-white shrink-0" />
                 )}
                 <span className="truncate">
                   {!isOffline
                     ? onlinePopupLabel
                     : !isNetworkOnline
-                    ? 'No internet connection · Offline mode'
-                    : 'Offline mode · Playing downloads'}
+                    ? 'no internet connection · offline mode'
+                    : 'offline mode · playing downloads'}
                 </span>
               </div>
 
@@ -3760,47 +4064,43 @@ export default function App() {
                           tick: Date.now(),
                         });
                       }}
-                      className="underline text-white hover:text-white/80 text-[11px]"
+                      className="underline text-white hover:text-[#A1A1AA] text-[11px]"
                     >
-                      Downloads
+                      downloads
                     </button>
                   )}
                   {isNetworkOnline && manualOfflineMode && (
                     <button
                       type="button"
                       onClick={() => setManualOfflineMode(false)}
-                      className="px-2.5 py-0.5 rounded-full bg-white text-black text-[11px] font-extrabold"
+                      className="ather-acid-btn px-2.5 py-0.5 rounded-full text-[11px] font-extrabold"
                     >
-                      Go Online
+                      go online
                     </button>
                   )}
                 </div>
               ) : (
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-black/65 shrink-0">
-                  Connected
+                <span className="text-[10px] font-extrabold tracking-wider text-black/80 shrink-0">
+                  connected
                 </span>
               )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Floating Dark Pill Navigation Bar */}
+        {/* floating monochrome pill navigation bar */}
         <nav
-          ref={navRef}
-          aria-label="Primary navigation"
-          style={{ backgroundColor: `rgba(14, 14, 17, ${Math.max(0.95, lookPrefs.glassOpacity)})` }}
-          className="pointer-events-auto relative max-w-[480px] w-full rounded-full backdrop-blur-xl border border-white/25 p-1.5 sm:p-2 flex items-center justify-between shadow-[0_14px_38px_rgba(0,0,0,0.88)]"
+          aria-label="primary navigation"
+          className="ather-depth-bar pointer-events-auto relative max-w-[480px] w-full rounded-full p-1.5 grid grid-cols-5 items-center"
         >
           <div
             aria-hidden="true"
-            className="absolute top-1.5 bottom-1.5 sm:top-2 sm:bottom-2 left-0 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.22)] pointer-events-none"
+            className="absolute left-1.5 top-1.5 bottom-1.5 w-[calc((100%-12px)/5)] rounded-full bg-white pointer-events-none"
             style={{
-              transform: `translate3d(${thumbStyle.left}px, 0, 0)`,
-              width: `${thumbStyle.width}px`,
-              opacity: thumbStyle.ready ? 1 : 0,
+              transform: `translate3d(${activeNavIdx * 100}%, 0, 0)`,
               transition: lookPrefs.springMotion
-                ? 'transform 0.45s cubic-bezier(0.32, 1.28, 0.36, 1), width 0.38s cubic-bezier(0.32, 1.28, 0.36, 1), opacity 0.2s ease'
-                : 'transform 0.2s ease-out, width 0.18s ease-out, opacity 0.15s ease',
+                ? 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)'
+                : 'transform 120ms ease-out',
             }}
           />
 
@@ -3808,16 +4108,11 @@ export default function App() {
             const Icon = item.icon;
             const active = activeTab === item.id;
             return (
-              <motion.button
+              <button
                 key={item.id}
-                ref={(el) => {
-                  tabRefs.current[item.id] = el;
-                }}
                 type="button"
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                whileTap={{ scale: 0.92 }}
-                transition={{ type: 'spring', stiffness: 480, damping: 24 }}
                 onClick={() => {
                   setActiveTab(item.id);
                   setSelectedArtist(null);
@@ -3825,19 +4120,17 @@ export default function App() {
                   setSelectedCollection(null);
                   setSelectedShelf(null);
                 }}
-                className={`relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 rounded-full transition-colors duration-200 touch-manipulation ${
+                className={`relative z-10 flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 rounded-full text-[10px] font-extrabold transition-colors duration-150 touch-manipulation active:scale-95 ${
                   active
-                    ? 'text-black px-3 sm:px-5 py-2 sm:py-2.5 font-extrabold'
-                    : 'text-white/80 hover:text-white w-10 sm:w-12 h-10 sm:h-11 font-extrabold'
+                    ? 'text-black'
+                    : 'text-[#A1A1AA] hover:text-white'
                 }`}
               >
-                <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] shrink-0" active={active} />
-                {active && (
-                  <span className="text-xs sm:text-[13px] font-extrabold whitespace-nowrap">
-                    {item.label}
-                  </span>
-                )}
-              </motion.button>
+                <Icon className="w-5 h-5 shrink-0" active={active} />
+                <span className="leading-none truncate max-w-full">
+                  {item.label}
+                </span>
+              </button>
             );
           })}
         </nav>

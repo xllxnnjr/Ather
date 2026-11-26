@@ -103,7 +103,7 @@ service cloud.firestore {
         && (!('favorites' in acc) || (acc.favorites is list && acc.favorites.size() <= 400))
         && (!('favoriteStates' in acc) || (acc.favoriteStates is map && acc.favoriteStates.keys().size() <= 400))
         && (!('aiSettings' in acc) || (acc.aiSettings is map && acc.aiSettings.keys().size() <= 10))
-        && (!('preferences' in acc) || (acc.preferences is map && acc.preferences.keys().size() <= 25))
+        && (!('preferences' in acc) || (acc.preferences is map && acc.preferences.keys().size() <= 40))
         && (!('eqState' in acc) || (acc.eqState is map && acc.eqState.keys().size() <= 5))
         && (!('recentIds' in acc) || (acc.recentIds is list && acc.recentIds.size() <= 20))
         && (!('playHistory' in acc) || (acc.playHistory is list && acc.playHistory.size() <= 150))

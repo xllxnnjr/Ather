@@ -18,17 +18,17 @@ export const PLAYLIST_COVER_PRESETS: ArtworkStyle[] = [
 ];
 
 export const CATEGORIES: CategoryPill[] = [
-  'All',
-  'Party',
-  'Blues',
-  'Sad',
-  'Hip Hop',
+  'all',
+  'party',
+  'blues',
+  'sad',
+  'hip hop',
 ];
 
 export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   {
     id: 'mg-hip-hop',
-    title: 'Hip Hop',
+    title: 'hip hop',
     searchQuery: 'hip hop',
     gradientFrom: '#1C1D22',
     gradientTo: '#0B0B0D',
@@ -36,7 +36,7 @@ export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   },
   {
     id: 'mg-electronic',
-    title: 'Electronic',
+    title: 'electronic',
     searchQuery: 'electronic',
     gradientFrom: '#181C20',
     gradientTo: '#090A0C',
@@ -44,7 +44,7 @@ export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   },
   {
     id: 'mg-rnb',
-    title: 'R&B',
+    title: 'r&b',
     searchQuery: 'r&b',
     gradientFrom: '#201B22',
     gradientTo: '#0A090D',
@@ -52,7 +52,7 @@ export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   },
   {
     id: 'mg-pop',
-    title: 'Pop',
+    title: 'pop',
     searchQuery: 'pop',
     gradientFrom: '#1E201A',
     gradientTo: '#0A0B09',
@@ -60,7 +60,7 @@ export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   },
   {
     id: 'mg-blues',
-    title: 'Blues',
+    title: 'blues',
     searchQuery: 'blues',
     gradientFrom: '#191C22',
     gradientTo: '#0A0B0F',
@@ -68,7 +68,7 @@ export const MOOD_GENRE_TILES: MoodGenreTile[] = [
   },
   {
     id: 'mg-party',
-    title: 'Party',
+    title: 'party',
     searchQuery: 'party',
     gradientFrom: '#221E17',
     gradientTo: '#0B0A08',

@@ -1,5 +1,6 @@
 import { ShowcaseTrack } from '../types/music';
-import { getAudiusStreamUrl, resolveFullAudiusTrack } from './audiusApi';
+import { getAudiusStreamUrl } from './audiusApi';
+import { AudioQualityTier, resolveFullAudioStream } from './simpmusicStreamResolver';
 import { getActiveUserId } from './userScope';
 
 const DB_NAME = 'ather-offline-downloads';
@@ -167,60 +168,86 @@ export async function getOfflineAudioUrl(
   return url;
 }
 
-async function fetchPlayableAudioBlob(track: ShowcaseTrack): Promise<Blob | null> {
+export interface OfflineDownloadResult {
+  ok: boolean;
+  error?: string;
+}
+
+async function fetchFullAudioBlob(
+  track: ShowcaseTrack,
+  quality: AudioQualityTier = 'High'
+): Promise<Blob | null> {
   const candidateUrls: string[] = [];
 
-  if (track.streamUrl) {
+  if (
+    track.streamUrl &&
+    track.streamStatus === 'full' &&
+    track.streamSource !== 'itunes-preview'
+  ) {
     candidateUrls.push(track.streamUrl);
   }
+
+  try {
+    const resolved = await resolveFullAudioStream(track, quality);
+    if (resolved?.streamUrl && resolved.source !== 'itunes-preview') {
+      candidateUrls.push(resolved.streamUrl);
+    }
+  } catch {
+    // Try remaining full stream candidates
+  }
+
   if (track.audiusId) {
     candidateUrls.push(getAudiusStreamUrl(track.audiusId));
   }
-  if (!track.streamUrl && track.source !== 'audius') {
-    try {
-      const upgraded = await resolveFullAudiusTrack(track);
-      if (upgraded.streamUrl) candidateUrls.push(upgraded.streamUrl);
-    } catch {
-      // Ignore Audius lookup errors and fall back to previewUrl if present
-    }
-  }
-  if (track.previewUrl) {
-    candidateUrls.push(track.previewUrl);
-  }
 
   for (const url of Array.from(new Set(candidateUrls))) {
+    if (!url || (track.previewUrl && url === track.previewUrl)) continue;
     try {
       const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 14000);
+      const timeout = window.setTimeout(() => controller.abort(), 24000);
       const res = await fetch(url, { signal: controller.signal });
       window.clearTimeout(timeout);
       if (!res.ok) continue;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.toLowerCase().includes('text/html')) continue;
       const blob = await res.blob();
-      if (blob && blob.size > 1024) {
+      if (
+        blob &&
+        blob.size >= 16384 &&
+        !String(blob.type || '').toLowerCase().includes('text/html')
+      ) {
         return blob;
       }
     } catch {
-      // Try next URL candidate
+      // Try next full stream URL candidate
     }
   }
   return null;
 }
 
 /**
- * Downloads the real playable audio stream into IndexedDB so it plays completely offline.
- * Returns true if a real Blob was stored cleanly on the device.
+ * Downloads the full SimpMusic/InnerTube/Piped/Audius track audio into IndexedDB.
+ * Never saves 30s iTunes preview clips as offline full songs.
  */
 export async function saveTrackOffline(
   track: ShowcaseTrack,
-  uid?: string | null
-): Promise<boolean> {
+  uid?: string | null,
+  quality: AudioQualityTier = 'High'
+): Promise<OfflineDownloadResult> {
   try {
     const key = scopedBlobKey(track.id, uid);
     const existing = await getAudioEntry(key);
-    if (existing && existing.blob.size > 0) return true;
+    if (existing && existing.blob.size >= 16384) {
+      return { ok: true };
+    }
 
-    const blob = await fetchPlayableAudioBlob(track);
-    if (!blob) return false;
+    const blob = await fetchFullAudioBlob(track, quality);
+    if (!blob) {
+      return {
+        ok: false,
+        error: 'full track stream is unavailable for offline download right now',
+      };
+    }
 
     const oldUrl = memoryBlobUrlCache.get(key);
     if (oldUrl) {
@@ -231,12 +258,15 @@ export async function saveTrackOffline(
     await putAudioEntry({
       trackId: key,
       blob,
-      mimeType: blob.type || 'audio/mpeg',
+      mimeType: blob.type || 'audio/mp4',
       sizeBytes: blob.size,
       savedAt: new Date().toISOString(),
     });
-    return true;
+    return { ok: true };
   } catch {
-    return false;
+    return {
+      ok: false,
+      error: 'could not store offline audio on this device',
+    };
   }
 }

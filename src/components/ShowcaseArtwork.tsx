@@ -29,13 +29,6 @@ const GRADIENT_THEMES: Record<ArtworkStyle, string> = {
     'radial-gradient(circle at 20% 80%, rgba(255,255,255,0.13) 0%, transparent 50%), linear-gradient(145deg, #1E1E20 0%, #101012 60%, #050506 100%)',
 };
 
-export function isLetterboxedYtThumb(url?: string): boolean {
-  if (!url) return false;
-  return /https?:\/\/i\.ytimg\.com\/vi\/[^/]+\/(?:hqdefault|sddefault|default|0)\.jpg/i.test(
-    url
-  );
-}
-
 export const ShowcaseArtwork: React.FC<ShowcaseArtworkProps> = ({
   style = 'lime-noir',
   coverUrl,
@@ -50,20 +43,17 @@ export const ShowcaseArtwork: React.FC<ShowcaseArtworkProps> = ({
   }, [coverUrl]);
 
   if (coverUrl && !imgFailed) {
-    const cropLetterbox = isLetterboxedYtThumb(coverUrl);
     return (
       <div
-        className={`relative overflow-hidden select-none bg-[#0E0E10] ${className}`}
+        className={`relative overflow-hidden select-none bg-[#141418] ${className}`}
       >
         <img
           src={coverUrl}
-          alt={alt}
+          alt={alt.toLowerCase()}
           loading="lazy"
           referrerPolicy="no-referrer"
           onError={() => setImgFailed(true)}
-          className={`w-full h-full object-cover object-center ${
-            cropLetterbox ? 'scale-[1.35]' : ''
-          }`}
+          className="w-full h-full object-cover object-center"
         />
       </div>
     );
@@ -77,12 +67,12 @@ export const ShowcaseArtwork: React.FC<ShowcaseArtworkProps> = ({
       }}
     >
       <div
-        className={`rounded-full border border-white/15 flex items-center justify-center ${
+        className={`rounded-full border border-[#242429] bg-[#141418] flex items-center justify-center ${
           compact ? 'w-7 h-7' : 'w-16 h-16'
         }`}
       >
         <div
-          className={`rounded-full border border-white/40 bg-black/60 ${
+          className={`rounded-full border border-black bg-white ${
             compact ? 'w-2.5 h-2.5' : 'w-5 h-5'
           }`}
         />
@@ -117,17 +107,14 @@ export const PlaylistCover: React.FC<PlaylistCoverProps> = ({
   }, [coverImageUrl]);
 
   if (coverImageUrl && !failed) {
-    const cropLetterbox = isLetterboxedYtThumb(coverImageUrl);
     return (
-      <div className={`relative overflow-hidden bg-[#0E0E10] ${className}`}>
+      <div className={`relative overflow-hidden bg-[#141418] ${className}`}>
         <img
           src={coverImageUrl}
-          alt={alt}
+          alt={alt.toLowerCase()}
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
-          className={`w-full h-full object-cover object-center ${
-            cropLetterbox ? 'scale-[1.35]' : ''
-          }`}
+          className="w-full h-full object-cover object-center"
         />
       </div>
     );

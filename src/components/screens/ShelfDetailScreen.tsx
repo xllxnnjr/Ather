@@ -59,17 +59,17 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
-            aria-label="Back to Home"
+            aria-label="back to home"
             onClick={onBack}
-            className="w-10 h-10 rounded-full bg-[#141416] border border-white/12 text-white flex items-center justify-center hover:border-white/35 active:scale-90 transition-all shrink-0"
+            className="ather-depth-btn w-11 h-11 rounded-full text-white flex items-center justify-center active:scale-90 transition-transform shrink-0"
           >
             <ChevronLeftGlyph className="w-5 h-5" />
           </button>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
-              {shelf.title}
+              {shelf.title.toLowerCase()}
             </h1>
-            <p className="text-xs text-[#9A9AA6] tabular-nums">
+            <p className="text-xs font-bold text-[#A1A1AA] tabular-nums">
               {shelf.cards.length} {shelf.cards.length === 1 ? 'item' : 'items'}
             </p>
           </div>
@@ -80,26 +80,26 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
             <button
               type="button"
               onClick={() => onShufflePlay(playableIds)}
-              aria-label={`Shuffle ${shelf.title}`}
-              className="w-10 h-10 rounded-full bg-[#141416] border border-white/12 text-white/85 hover:text-white hover:border-white/35 flex items-center justify-center active:scale-90 transition-all"
+              aria-label={`shuffle ${shelf.title.toLowerCase()}`}
+              className="ather-depth-btn w-11 h-11 rounded-full text-white flex items-center justify-center active:scale-90 transition-transform"
             >
               <ShuffleGlyph className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={() => onPlayAll(playableTracks, 0)}
-              className="px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold inline-flex items-center gap-1.5 hover:bg-white/90 active:scale-95 transition-all"
+              className="ather-acid-btn px-4 py-2.5 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 active:scale-95 transition-transform"
             >
               <PlayGlyph className="w-3.5 h-3.5 translate-x-[0.5px]" />
-              <span>Play All</span>
+              <span>play all</span>
             </button>
           </div>
         )}
       </div>
 
       {shelf.cards.length === 0 ? (
-        <div className="rounded-3xl bg-[#141416] border border-white/10 p-8 text-center text-xs text-[#9A9AA6]">
-          No items available in {shelf.title} right now.
+        <div className="ather-depth-card rounded-3xl p-8 text-center text-xs font-bold text-[#A1A1AA]">
+          no items available in {shelf.title.toLowerCase()} right now.
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -141,24 +141,22 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
                     className="w-full text-left transition-transform active:scale-[0.98]"
                   >
                     <div
-                      className={`relative w-full aspect-square rounded-2xl overflow-hidden border transition-all ${
-                        isCurrent
-                          ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]'
-                          : 'border-white/12 group-hover:border-white/30'
+                      className={`relative w-full aspect-square rounded-2xl overflow-hidden border bg-[#141418] transition-all ${
+                        isCurrent ? 'border-white ring-2 ring-white' : 'border-[#242429]'
                       }`}
                     >
                       <ShowcaseArtwork
                         style={card.artwork}
                         coverUrl={card.coverUrl}
-                        alt={card.title}
+                        alt={card.title.toLowerCase()}
                         compact={true}
                         className="w-full h-full transition-transform duration-500 group-hover:scale-105"
                       />
                       <div
-                        className={`absolute bottom-2.5 right-2.5 w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
+                        className={`absolute bottom-2.5 right-2.5 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
                           isCurrent
-                            ? 'bg-white text-black opacity-100 scale-100'
-                            : 'bg-black/80 text-white border border-white/25 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 scale-100 sm:scale-90 sm:group-hover:scale-100'
+                            ? 'ather-acid-btn opacity-100 scale-100'
+                            : 'ather-depth-btn text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 scale-100 sm:scale-90 sm:group-hover:scale-100'
                         }`}
                       >
                         {isCurrent && isPlaying ? (
@@ -173,9 +171,9 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
                   {track && onOpenTrackInfo && (
                     <button
                       type="button"
-                      aria-label={`Track options for ${card.title}`}
+                      aria-label={`track options for ${card.title.toLowerCase()}`}
                       onClick={() => onOpenTrackInfo(track)}
-                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/75 border border-white/15 text-white/80 hover:text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                      className="ather-depth-btn absolute top-2 right-2 w-8 h-8 rounded-full text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     >
                       <MoreDotsGlyph className="w-3.5 h-3.5" />
                     </button>
@@ -185,18 +183,20 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
                 <div className="mt-2.5 flex items-start gap-2">
                   <div
                     className={`w-[2.5px] h-8 rounded-full mt-0.5 shrink-0 ${
-                      isCurrent ? 'bg-white' : 'bg-white/30'
+                      isCurrent ? 'bg-white' : 'bg-[#242429]'
                     }`}
                   />
                   <div className="min-w-0 flex-1">
                     <button
                       type="button"
                       onClick={handleOpenCard}
-                      className="block max-w-full text-sm font-bold text-white truncate leading-tight text-left"
+                      className={`block max-w-full text-sm font-extrabold truncate leading-tight text-left ${
+                        isCurrent ? 'text-white underline underline-offset-4' : 'text-white'
+                      }`}
                     >
-                      {card.title}
+                      {card.title.toLowerCase()}
                     </button>
-                    <div className="flex items-center gap-1 text-xs text-white/55 mt-0.5 leading-tight">
+                    <div className="flex items-center gap-1 text-xs text-[#A1A1AA] font-bold mt-0.5 leading-tight">
                       <button
                         type="button"
                         onClick={() =>
@@ -206,12 +206,12 @@ export const ShelfDetailScreen: React.FC<ShelfDetailScreenProps> = ({
                         }
                         className="hover:text-white hover:underline truncate text-left transition-colors"
                       >
-                        {card.subtitle || card.artist}
+                        {(card.subtitle || card.artist).toLowerCase()}
                       </button>
                       {track && track.duration > 0 && (
                         <>
                           <span aria-hidden="true">·</span>
-                          <span className="tabular-nums shrink-0 text-[11px] text-white/45">
+                          <span className="tabular-nums shrink-0 text-[11px] text-[#A1A1AA]">
                             {formatDuration(track.duration)}
                           </span>
                         </>

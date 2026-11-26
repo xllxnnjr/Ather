@@ -26,30 +26,30 @@ export const SignInLoadingScreen: React.FC<SignInLoadingScreenProps> = ({
   useEffect(() => {
     const timer = window.setInterval(() => {
       setDotCount((prev) => (prev >= 3 ? 1 : prev + 1));
-    }, 360);
+    }, 320);
     return () => window.clearInterval(timer);
   }, []);
 
   const providerLabel =
     provider === 'google'
-      ? 'Google Account'
+      ? 'google account'
       : provider === 'apple'
-      ? 'Apple Account'
+      ? 'apple account'
       : provider === 'email'
-      ? 'Email Account'
-      : 'Guest Session';
+      ? 'email account'
+      : 'guest session';
 
   const headline =
     stage === 'syncing'
-      ? 'Syncing your ATHER data'
-      : 'Signing you in';
+      ? 'syncing your Ather data'
+      : 'signing you in';
 
   const subtitle =
     stage === 'syncing'
-      ? 'Restoring playlists, likes, settings & devices across devices'
+      ? 'restoring playlists, likes, settings & devices across devices'
       : provider === 'google'
-      ? `Connecting ${email || displayName || providerLabel}`
-      : `Preparing ${displayName || providerLabel}`;
+      ? `connecting ${(email || displayName || providerLabel).toLowerCase()}`
+      : `preparing ${(displayName || providerLabel).toLowerCase()}`;
 
   const dots = '.'.repeat(dotCount);
 
@@ -58,50 +58,30 @@ export const SignInLoadingScreen: React.FC<SignInLoadingScreenProps> = ({
       role="status"
       aria-live="polite"
       aria-label={`${headline}`}
-      className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col items-center justify-between overflow-y-auto no-scrollbar select-none pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]"
+      className="fixed inset-0 h-[100dvh] z-50 bg-black text-white flex flex-col items-center justify-between overflow-y-auto no-scrollbar select-none pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]"
     >
-      {/* Monochrome Top Horizon Glow */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-x-0 top-0 h-[45dvh] pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 75% 55% at 50% 18%, rgba(255,255,255,0.09) 0%, rgba(0,0,0,0) 75%)',
-          filter: 'blur(30px)',
-        }}
-      />
-
       {/* Top Brand Wordmark */}
       <div className="relative z-10 flex items-center gap-2.5 pt-2 shrink-0">
-        <AtherLogoMark className="w-7 h-7 rounded-lg border border-white/15" />
-        <span className="text-sm font-black tracking-[0.22em] text-white/90 uppercase">
-          ATHER
+        <AtherLogoMark className="w-8 h-8 rounded-lg border border-[#242429]" />
+        <span className="text-sm font-black tracking-[0.1em] text-white">
+          Ather
         </span>
       </div>
 
-      {/* Center Animated Account + Ring */}
+      {/* Center Animated Account + Monochrome Ring */}
       <div className="relative z-10 flex flex-col items-center text-center my-auto py-8 max-w-sm w-full space-y-6">
         <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
-          {/* Spinning Crisp Monochrome Ring */}
           <motion.div
             aria-hidden="true"
             animate={{ rotate: 360 }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-            className="absolute inset-0 rounded-full border-2 border-white/12 border-t-white"
+            transition={{ duration: 1.25, repeat: Infinity, ease: 'linear' }}
+            className="absolute inset-0 rounded-full border-[3px] border-[#141418] border-t-white"
           />
 
-          {/* Pulsing Halo */}
-          <motion.div
-            aria-hidden="true"
-            animate={{ scale: [0.94, 1.06, 0.94], opacity: [0.25, 0.55, 0.25] }}
-            transition={{ duration: 2.0, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute inset-2 rounded-full border border-white/20"
-          />
-
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border border-white/25 bg-[#141416] flex items-center justify-center shadow-[0_14px_40px_rgba(0,0,0,0.85)]">
+          <div className="ather-depth-card w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex items-center justify-center">
             {displayName || profileImageUrl ? (
               <ProfileAvatar
-                displayName={displayName || 'Listener'}
+                displayName={displayName || 'listener'}
                 imageUrl={profileImageUrl}
                 preset={avatarPreset}
                 className="w-full h-full"
@@ -115,18 +95,18 @@ export const SignInLoadingScreen: React.FC<SignInLoadingScreenProps> = ({
         <div className="space-y-2 px-2">
           <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
             {headline}
-            <span className="inline-block w-5 text-left">{dots}</span>
+            <span className="inline-block w-5 text-left text-white">{dots}</span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#9A9AA6] leading-relaxed">
+          <p className="text-xs sm:text-sm font-bold text-[#A1A1AA] leading-relaxed">
             {subtitle}
           </p>
         </div>
 
-        {/* Minimal Indeterminate Progress Pill */}
-        <div className="w-44 h-1 rounded-full bg-white/12 overflow-hidden">
+        {/* Crisp Monochrome Indeterminate Progress Pill */}
+        <div className="w-44 h-2 rounded-full bg-[#141418] border border-[#242429] overflow-hidden">
           <motion.div
             animate={{ x: ['-100%', '180%'] }}
-            transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
             className="h-full w-1/2 rounded-full bg-white"
           />
         </div>
@@ -134,10 +114,8 @@ export const SignInLoadingScreen: React.FC<SignInLoadingScreenProps> = ({
 
       {/* Bottom Footer Tag */}
       <div className="relative z-10 pb-2 text-center shrink-0">
-        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45">
-          {provider === 'google'
-            ? 'Google Account Sync'
-            : 'Isolated Account Space'}
+        <span className="text-[11px] font-bold tracking-[0.12em] text-[#A1A1AA]">
+          Ather session
         </span>
       </div>
     </div>

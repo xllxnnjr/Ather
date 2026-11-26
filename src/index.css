@@ -9,6 +9,13 @@
     --page-pl: max(1rem, var(--safe-left));
     --page-pr: max(1rem, var(--safe-right));
     --page-pt: calc(5.25rem + var(--safe-top));
+    --ather-bg: #000000;
+    --ather-surface: #0D0D10;
+    --ather-elevated: #141418;
+    --ather-accent: #FFFFFF;
+    --ather-accent-ink: #000000;
+    --ather-muted: #A1A1AA;
+    --ather-border: #242429;
   }
 
   @media (min-width: 640px) {
@@ -79,5 +86,79 @@
 @media (min-width: 640px) {
   .ather-hero-topbar {
     top: calc(5.5rem + var(--safe-top));
+  }
+}
+
+/* Crisp Monochrome High-Contrast Surfaces (Fast Single-Layer Shadows, GPU Compositor Friendly) */
+.ather-depth-card {
+  background-color: #0D0D10;
+  border: 1.5px solid #242429;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.ather-depth-row {
+  background-color: #0D0D10;
+  border: 1.5px solid #242429;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.ather-depth-pill {
+  background-color: #141418;
+  border: 1.5px solid #2A2A32;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.ather-depth-bar {
+  background-color: #0B0B0E;
+  border: 1.5px solid #2A2A32;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.72);
+}
+
+.ather-depth-btn {
+  background-color: #141418;
+  border: 1.5px solid #2E2E36;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.ather-acid-btn {
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 1.5px solid #FFFFFF;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Smooth GPU-only marquee columns for AuthGateScreen portrait collage */
+@keyframes ather-marquee-up {
+  0% {
+    transform: translate3d(0, 0%, 0);
+  }
+  100% {
+    transform: translate3d(0, -50%, 0);
+  }
+}
+
+@keyframes ather-marquee-down {
+  0% {
+    transform: translate3d(0, -50%, 0);
+  }
+  100% {
+    transform: translate3d(0, 0%, 0);
+  }
+}
+
+.ather-marquee-up {
+  animation: ather-marquee-up 34s linear infinite;
+  will-change: transform;
+}
+
+.ather-marquee-down {
+  animation: ather-marquee-down 38s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ather-marquee-up,
+  .ather-marquee-down {
+    animation: none;
   }
 }

@@ -1,57 +1,21 @@
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { ShowcaseTrack } from '../types/music';
-import { resolveFullAudiusTrack } from './audiusApi';
 import { recordTrackStream } from './listeningStats';
 import { mediaSessionService } from './mediaSession';
-import { resolveYouTubeCandidates } from './musicApi';
 import { getOfflineAudioUrl } from './offlineDownloads';
 import { loadPlaybackSession, savePlaybackSession } from './playbackPersistence';
 import { queueManager } from './queueManager';
+import {
+  AudioQualityTier,
+  preloadFullAudioStream,
+  resolveFullAudioStream,
+} from './simpmusicStreamResolver';
 import { getActiveUserId } from './userScope';
-
-interface YTPlayerInstance {
-  loadVideoById: (options: { videoId: string; startSeconds?: number } | string) => void;
-  cueVideoById: (options: { videoId: string; startSeconds?: number } | string) => void;
-  playVideo: () => void;
-  pauseVideo: () => void;
-  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
-  setSize?: (width: number, height: number) => void;
-  getIframe?: () => HTMLElement | null;
-  getCurrentTime: () => number;
-  getDuration: () => number;
-  getPlayerState: () => number;
-  unMute: () => void;
-  setVolume: (volume: number) => void;
-  destroy: () => void;
-}
-
-interface YTGlobal {
-  Player: new (
-    element: HTMLElement | string,
-    options: {
-      height?: string | number;
-      width?: string | number;
-      videoId?: string;
-      playerVars?: Record<string, string | number>;
-      events?: {
-        onReady?: (event: { target: YTPlayerInstance }) => void;
-        onStateChange?: (event: { data: number; target: YTPlayerInstance }) => void;
-        onError?: (event: { data: number; target: YTPlayerInstance }) => void;
-      };
-    }
-  ) => YTPlayerInstance;
-}
-
-declare global {
-  interface Window {
-    YT?: YTGlobal;
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
 
 export interface AudioEngineSnapshot {
   trackId: string | null;
-  videoId: string | null;
-  mode: 'youtube' | 'html-audio';
+  mode: 'html-audio';
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -61,32 +25,24 @@ export interface AudioEngineSnapshot {
 
 type AudioStateListener = (snapshot: AudioEngineSnapshot) => void;
 
-const HOST_ELEMENT_ID = 'ather-yt-host';
-const PLAYER_ELEMENT_ID = 'ather-yt-player';
+interface CachedResolvedAudio {
+  url: string;
+  streamStatus: 'full' | 'preview-only';
+  streamSource?: ShowcaseTrack['streamSource'];
+  duration?: number;
+  audiusId?: string;
+}
 
 class UnifiedAudioEngine {
-  private player: YTPlayerInstance | null = null;
-  private isPlayerReady = false;
-  private readyPromise: Promise<YTPlayerInstance | null> | null = null;
-  private apiLoadingPromise: Promise<void> | null = null;
-
-  private activeCoverEl: HTMLElement | null = null;
-  private resizeObserver: ResizeObserver | null = null;
-
   private htmlAudio: HTMLAudioElement | null = null;
-  private activeMode: 'youtube' | 'html-audio' = 'youtube';
 
   private listeners = new Set<AudioStateListener>();
   private onEndedCallback: (() => void) | null = null;
+  private onTrackStreamResolvedCallback: ((track: ShowcaseTrack) => void) | null = null;
   private navCallbacks: { onPrevious?: () => void; onNext?: () => void } = {};
 
   private activeTrack: ShowcaseTrack | null = null;
-  private candidates: string[] = [];
-  private candidateIndex = 0;
   private desiredPlaying = false;
-  private pendingVideoLoad: { videoId: string; startSeconds: number; autoplay: boolean } | null = null;
-  private watchdogTimer: number | null = null;
-  private tickTimer: number | null = null;
   private resolveSeq = 0;
   private hasRestoredSession = false;
   private currentUid: string | null = null;
@@ -94,11 +50,21 @@ class UnifiedAudioEngine {
   private streamRecordedForSession = false;
   private accumulatedListenSec = 0;
   private lastListenSampleAt = 0;
+  private isAdvancingTrack = false;
+
+  private preResolvedCache = new Map<string, CachedResolvedAudio>();
+  private preloadingIds = new Set<string>();
+  private preferredQualityTier: AudioQualityTier = 'High';
+  private eqBands: number[] = [0, 0, 0, 0, 0];
+  private volumeNormalization = true;
+  private monoAudio = false;
+  private crossfadeSeconds = 4;
+  private gaplessPlayback = true;
+  private fadeRafId: number | null = null;
 
   private state: AudioEngineSnapshot = {
     trackId: null,
-    videoId: null,
-    mode: 'youtube',
+    mode: 'html-audio',
     isPlaying: false,
     isBuffering: false,
     currentTime: 0,
@@ -144,21 +110,6 @@ class UnifiedAudioEngine {
         this.seekTo(this.getCurrentTime() + offset);
       },
     });
-
-    // Pre-warm the YouTube IFrame API & permanent #ather-yt-host once DOM is ready
-    // so the very first song tap starts without a 2s script bootstrap delay.
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      const warmup = () => {
-        if (document.body) {
-          void this.ensurePlayer();
-        }
-      };
-      if (document.readyState === 'loading') {
-        window.addEventListener('DOMContentLoaded', warmup, { once: true });
-      } else {
-        window.setTimeout(warmup, 80);
-      }
-    }
   }
 
   public setNavigationCallbacks(callbacks: {
@@ -168,12 +119,79 @@ class UnifiedAudioEngine {
     this.navCallbacks = callbacks;
   }
 
+  public setOnTrackStreamResolved(cb: ((track: ShowcaseTrack) => void) | null) {
+    this.onTrackStreamResolvedCallback = cb;
+  }
+
   public setCurrentUid(uid: string | null) {
     this.currentUid = uid;
   }
 
   public setTrackingEnabled(enabled: boolean) {
     this.trackingEnabled = enabled;
+  }
+
+  public setPreferredQualityTier(tier: AudioQualityTier) {
+    this.preferredQualityTier = tier;
+  }
+
+  public setEqBands(bands: number[]) {
+    if (Array.isArray(bands) && bands.length > 0) {
+      this.eqBands = bands.slice(0, 5);
+    }
+  }
+
+  public setVolumeNormalization(enabled: boolean) {
+    this.volumeNormalization = Boolean(enabled);
+    if (this.htmlAudio && !this.fadeRafId) {
+      this.htmlAudio.volume = this.getTargetBaseVolume();
+    }
+  }
+
+  public setMonoAudio(enabled: boolean) {
+    this.monoAudio = Boolean(enabled);
+  }
+
+  public setCrossfadeSeconds(seconds: number) {
+    this.crossfadeSeconds = Math.max(0, Math.min(12, Number(seconds) || 0));
+  }
+
+  public setGaplessPlayback(enabled: boolean) {
+    this.gaplessPlayback = Boolean(enabled);
+  }
+
+  private getTargetBaseVolume(): number {
+    // Subtle headroom scaling when volume normalization or bass boost is active
+    const maxBoostDb = Math.max(0, ...this.eqBands);
+    const headroom = maxBoostDb > 3 ? Math.max(0.75, 1 - maxBoostDb * 0.015) : 1;
+    return this.volumeNormalization ? Math.min(0.92, 0.9 * headroom) : Math.min(1, headroom);
+  }
+
+  private runFadeInRamp(audio: HTMLAudioElement) {
+    if (typeof window === 'undefined') return;
+    if (this.fadeRafId !== null) {
+      window.cancelAnimationFrame(this.fadeRafId);
+      this.fadeRafId = null;
+    }
+    const targetVol = this.getTargetBaseVolume();
+    const fadeMs = Math.min(2400, this.crossfadeSeconds * 400);
+    if (fadeMs <= 80) {
+      audio.volume = targetVol;
+      return;
+    }
+    const start = performance.now();
+    audio.volume = Math.max(0.18, targetVol * 0.3);
+    const step = (now: number) => {
+      const pct = Math.min(1, (now - start) / fadeMs);
+      audio.volume = Math.min(1, targetVol * (0.3 + 0.7 * pct));
+      if (pct < 1) {
+        this.fadeRafId = window.requestAnimationFrame(step);
+      } else {
+        audio.volume = targetVol;
+        this.fadeRafId = null;
+      }
+    };
+    this.fadeRafId = window.requestAnimationFrame(step);
   }
 
   public getRestoredTrack(): ShowcaseTrack | null {
@@ -208,8 +226,7 @@ class UnifiedAudioEngine {
 
     this.state = {
       trackId: saved.track.id,
-      videoId: saved.track.youtubeVideoId ?? null,
-      mode: 'youtube',
+      mode: 'html-audio',
       isPlaying: false,
       isBuffering: false,
       currentTime: saved.positionSec,
@@ -224,14 +241,8 @@ class UnifiedAudioEngine {
   public resetForAccountSwitch(): void {
     this.resolveSeq += 1;
     this.desiredPlaying = false;
-    this.clearWatchdog();
-    this.stopTicker();
-    this.stopYouTubeAudio();
-    this.stopHtmlAudio();
+    this.stopHtmlAudio(true);
     this.activeTrack = null;
-    this.candidates = [];
-    this.candidateIndex = 0;
-    this.pendingVideoLoad = null;
     this.streamRecordedForSession = false;
     this.accumulatedListenSec = 0;
     this.lastListenSampleAt = 0;
@@ -239,8 +250,7 @@ class UnifiedAudioEngine {
     queueManager.reset();
     this.state = {
       trackId: null,
-      videoId: null,
-      mode: 'youtube',
+      mode: 'html-audio',
       isPlaying: false,
       isBuffering: false,
       currentTime: 0,
@@ -255,14 +265,8 @@ class UnifiedAudioEngine {
   public reloadSessionForActiveAccount(uidOverride?: string | null): ShowcaseTrack | null {
     this.resolveSeq += 1;
     this.desiredPlaying = false;
-    this.clearWatchdog();
-    this.stopTicker();
-    this.stopYouTubeAudio();
-    this.stopHtmlAudio();
+    this.stopHtmlAudio(true);
     this.activeTrack = null;
-    this.candidates = [];
-    this.candidateIndex = 0;
-    this.pendingVideoLoad = null;
     this.streamRecordedForSession = false;
     this.accumulatedListenSec = 0;
     this.lastListenSampleAt = 0;
@@ -275,8 +279,7 @@ class UnifiedAudioEngine {
     if (!saved) {
       this.state = {
         trackId: null,
-        videoId: null,
-        mode: 'youtube',
+        mode: 'html-audio',
         isPlaying: false,
         isBuffering: false,
         currentTime: 0,
@@ -305,8 +308,7 @@ class UnifiedAudioEngine {
 
     this.state = {
       trackId: saved.track.id,
-      videoId: saved.track.youtubeVideoId ?? null,
-      mode: 'youtube',
+      mode: 'html-audio',
       isPlaying: false,
       isBuffering: false,
       currentTime: saved.positionSec,
@@ -325,8 +327,7 @@ class UnifiedAudioEngine {
     this.desiredPlaying = false;
     this.state = {
       trackId: track.id,
-      videoId: track.youtubeVideoId ?? null,
-      mode: 'youtube',
+      mode: 'html-audio',
       isPlaying: false,
       isBuffering: false,
       currentTime: Math.max(0, positionSec),
@@ -372,27 +373,28 @@ class UnifiedAudioEngine {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         flush();
-        // Keep YouTube background playback active when app is minimized / screen locked
         if (this.desiredPlaying) {
           mediaSessionService.updatePlaybackState(true);
-          if (this.activeMode === 'youtube' && this.canCallPlayer()) {
-            window.setTimeout(() => {
-              if (!this.desiredPlaying || this.activeMode !== 'youtube' || !this.canCallPlayer()) {
-                return;
-              }
-              try {
-                if (this.player!.getPlayerState?.() !== 1) {
-                  this.player!.unMute();
-                  this.player!.playVideo();
-                }
-              } catch {
-                // ignore
-              }
-            }, 220);
+          if (this.htmlAudio?.paused) {
+            void this.htmlAudio.play().catch(() => undefined);
           }
         }
       }
     });
+
+    if (Capacitor.isNativePlatform()) {
+      void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (!isActive) {
+          flush();
+          if (this.desiredPlaying) {
+            mediaSessionService.updatePlaybackState(true);
+            if (this.htmlAudio?.paused && this.htmlAudio.src) {
+              void this.htmlAudio.play().catch(() => undefined);
+            }
+          }
+        }
+      }).catch(() => undefined);
+    }
   }
 
   private sampleRealListening(fromFinish = false) {
@@ -412,7 +414,9 @@ class UnifiedAudioEngine {
     const effectiveListened = fromFinish
       ? Math.max(
           this.accumulatedListenSec,
-          this.state.duration > 0 ? Math.min(this.state.duration, this.state.currentTime || this.state.duration) : 30
+          this.state.duration > 0
+            ? Math.min(this.state.duration, this.state.currentTime || this.state.duration)
+            : 30
         )
       : this.accumulatedListenSec;
 
@@ -431,15 +435,20 @@ class UnifiedAudioEngine {
     this.listeners.forEach((cb) => cb(copy));
   }
 
+  /**
+   * Maintains ONE persistent HTMLAudioElement with playsInline so mobile browsers
+   * and Android WebViews never drop media activation across track auto-advance.
+   */
   private ensureHtmlAudio(): HTMLAudioElement | null {
     if (typeof Audio === 'undefined') return null;
     if (this.htmlAudio) return this.htmlAudio;
 
     const audio = new Audio();
     audio.preload = 'auto';
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
 
     audio.addEventListener('loadedmetadata', () => {
-      if (this.activeMode !== 'html-audio') return;
       const d =
         Number.isFinite(audio.duration) && audio.duration > 0
           ? audio.duration
@@ -449,7 +458,6 @@ class UnifiedAudioEngine {
     });
 
     audio.addEventListener('timeupdate', () => {
-      if (this.activeMode !== 'html-audio') return;
       const cur = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
       const dur =
         Number.isFinite(audio.duration) && audio.duration > 0
@@ -463,20 +471,51 @@ class UnifiedAudioEngine {
       mediaSessionService.updatePositionState(cur, dur);
       this.sampleRealListening(false);
       this.persistNow(false);
+
+      // Preload upcoming queue track before end so auto-advance is instant on mobile
+      const preloadLeadSec = this.gaplessPlayback ? 12 : 4;
+      if (dur > 0 && dur - cur <= preloadLeadSec) {
+        this.preloadNextFromQueue();
+      }
+      if (this.crossfadeSeconds > 0 && dur > 8 && dur - cur > 0 && dur - cur < Math.min(2.5, this.crossfadeSeconds * 0.4)) {
+        const remainRatio = Math.max(0.25, (dur - cur) / Math.min(2.5, this.crossfadeSeconds * 0.4));
+        audio.volume = this.getTargetBaseVolume() * remainRatio;
+      }
       this.emit();
     });
 
     audio.addEventListener('play', () => {
-      if (this.activeMode !== 'html-audio') return;
+      this.isAdvancingTrack = false;
       this.lastListenSampleAt = Date.now();
-      this.state = { ...this.state, isPlaying: true, isBuffering: false, error: null };
+      this.state = {
+        ...this.state,
+        isPlaying: true,
+        isBuffering: false,
+        error: null,
+      };
       mediaSessionService.updatePlaybackState(true);
       this.emit();
     });
 
+    audio.addEventListener('waiting', () => {
+      if (!this.desiredPlaying) return;
+      this.state = { ...this.state, isBuffering: true };
+      this.emit();
+    });
+
+    audio.addEventListener('playing', () => {
+      this.isAdvancingTrack = false;
+      this.state = {
+        ...this.state,
+        isPlaying: true,
+        isBuffering: false,
+        error: null,
+      };
+      this.emit();
+    });
+
     audio.addEventListener('pause', () => {
-      if (this.activeMode !== 'html-audio') return;
-      if (audio.ended) return;
+      if (audio.ended || this.isAdvancingTrack) return;
       this.lastListenSampleAt = 0;
       this.state = { ...this.state, isPlaying: false, isBuffering: false };
       mediaSessionService.updatePlaybackState(false);
@@ -485,9 +524,18 @@ class UnifiedAudioEngine {
     });
 
     audio.addEventListener('ended', () => {
-      if (this.activeMode !== 'html-audio') return;
-      this.desiredPlaying = false;
       this.lastListenSampleAt = 0;
+      this.sampleRealListening(true);
+      this.persistNow(true);
+
+      if (this.onEndedCallback) {
+        // Keep desiredPlaying/Audio element hot on mobile while calling onEndedCallback synchronously
+        this.isAdvancingTrack = true;
+        this.onEndedCallback();
+        return;
+      }
+
+      this.desiredPlaying = false;
       this.state = {
         ...this.state,
         isPlaying: false,
@@ -495,20 +543,17 @@ class UnifiedAudioEngine {
         currentTime: this.state.duration,
       };
       mediaSessionService.updatePlaybackState(false);
-      this.sampleRealListening(true);
-      this.persistNow(true);
       this.emit();
-      this.onEndedCallback?.();
     });
 
     audio.addEventListener('error', () => {
-      if (this.activeMode !== 'html-audio') return;
+      this.isAdvancingTrack = false;
       this.desiredPlaying = false;
       this.state = {
         ...this.state,
         isPlaying: false,
         isBuffering: false,
-        error: 'Unable to play this audio stream.',
+        error: 'unable to play this audio stream.',
       };
       mediaSessionService.updatePlaybackState(false);
       this.emit();
@@ -518,419 +563,79 @@ class UnifiedAudioEngine {
     return audio;
   }
 
-  private stopHtmlAudio() {
+  private stopHtmlAudio(clearSource = false) {
     if (!this.htmlAudio) return;
     try {
       this.htmlAudio.pause();
-      this.htmlAudio.removeAttribute('src');
-      this.htmlAudio.load();
+      if (clearSource) {
+        this.htmlAudio.removeAttribute('src');
+        this.htmlAudio.load();
+      }
     } catch {
       // ignore
     }
   }
 
-  /**
-   * Guards every YT Player API call so it NEVER fires before onReady or on a detached iframe.
-   */
-  private canCallPlayer(): boolean {
-    if (!this.player || !this.isPlayerReady) return false;
-    try {
-      const iframe = this.player.getIframe?.() ?? null;
-      return Boolean(iframe && document.body.contains(iframe));
-    } catch {
-      return false;
+  private preloadNextFromQueue() {
+    const { tracks, currentIndex, repeatMode } = queueManager.getState();
+    if (tracks.length === 0 || currentIndex < 0) return;
+    const nextIdx =
+      currentIndex + 1 < tracks.length
+        ? currentIndex + 1
+        : repeatMode === 'all'
+        ? 0
+        : -1;
+    if (nextIdx >= 0 && tracks[nextIdx]) {
+      this.preloadTrack(tracks[nextIdx]);
     }
   }
 
-  private stopYouTubeAudio() {
-    this.clearWatchdog();
-    this.stopTicker();
-    this.pendingVideoLoad = null;
-    if (this.canCallPlayer()) {
-      try {
-        this.player!.pauseVideo();
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  /**
-   * Mounts #ather-yt-host permanently once directly on document.body so the
-   * live YouTube <iframe> is NEVER detached or reparented across React views.
-   */
-  private getOrCreateHost(): HTMLDivElement {
-    let host = document.getElementById(HOST_ELEMENT_ID) as HTMLDivElement | null;
-    if (!host) {
-      host = document.createElement('div');
-      host.id = HOST_ELEMENT_ID;
-      host.setAttribute('aria-hidden', 'true');
-      Object.assign(host.style, {
-        position: 'fixed',
-        top: '0px',
-        left: '0px',
-        width: '160px',
-        height: '160px',
-        opacity: '0.01',
-        pointerEvents: 'none',
-        zIndex: '0',
-        overflow: 'hidden',
-      });
-
-      const inner = document.createElement('div');
-      inner.id = PLAYER_ELEMENT_ID;
-      inner.style.width = '100%';
-      inner.style.height = '100%';
-      host.appendChild(inner);
-      document.body.appendChild(host);
-    } else if (host.parentElement !== document.body) {
-      document.body.appendChild(host);
-    }
-    return host;
-  }
-
-  private syncOverlayBounds(): void {
-    if (typeof document === 'undefined' || !document.body) return;
-    const host = this.getOrCreateHost();
-    const el = this.activeCoverEl;
-
-    if (!el || !document.body.contains(el)) {
-      Object.assign(host.style, {
-        position: 'fixed',
-        top: '0px',
-        left: '0px',
-        width: '1px',
-        height: '1px',
-        opacity: '0.01',
-        pointerEvents: 'none',
-        zIndex: '0',
-        overflow: 'hidden',
-      });
-      return;
-    }
-
-    const rect = el.getBoundingClientRect();
-    const w = Math.max(Math.round(rect.width), 1);
-    const h = Math.max(Math.round(rect.height), 1);
-
-    Object.assign(host.style, {
-      position: 'fixed',
-      top: `${Math.round(rect.top)}px`,
-      left: `${Math.round(rect.left)}px`,
-      width: `${w}px`,
-      height: `${h}px`,
-      opacity: '0.01',
-      pointerEvents: 'none',
-      zIndex: '0',
-      overflow: 'hidden',
-    });
-
-    if (this.canCallPlayer() && w > 1 && h > 1) {
-      try {
-        this.player!.setSize?.(w, h);
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  /**
-   * Aligns #ather-yt-host visually over the active AlbumCoverWithHiddenPlayer rect
-   * without moving or detaching the iframe in the DOM.
-   */
-  public attachToCoverContainer(containerEl: HTMLElement | null) {
-    if (typeof document === 'undefined' || !document.body) return;
-    this.activeCoverEl = containerEl;
-    this.getOrCreateHost();
-
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-
-    if (containerEl && typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver(() => this.syncOverlayBounds());
-      this.resizeObserver.observe(containerEl);
-    }
-
-    this.syncOverlayBounds();
-  }
-
-  public detachCoverContainer(containerEl: HTMLElement | null) {
-    if (!containerEl || this.activeCoverEl === containerEl) {
-      this.attachToCoverContainer(null);
-    }
-  }
-
-  private loadYouTubeIframeApi(): Promise<void> {
-    if (typeof window === 'undefined') return Promise.resolve();
-    if (window.YT?.Player) return Promise.resolve();
-    if (this.apiLoadingPromise) return this.apiLoadingPromise;
-
-    this.apiLoadingPromise = new Promise<void>((resolve) => {
-      const existing = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        existing?.();
-        resolve();
+  private getBestImmediateUrl(track: ShowcaseTrack): CachedResolvedAudio | null {
+    const cached = this.preResolvedCache.get(track.id);
+    if (cached?.url) return cached;
+    if (track.streamUrl && track.streamStatus === 'full') {
+      return {
+        url: track.streamUrl,
+        streamStatus: 'full',
+        duration: track.duration,
+        audiusId: track.audiusId,
       };
-
-      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-        const script = document.createElement('script');
-        script.src = 'https://www.youtube.com/iframe_api';
-        script.async = true;
-        document.head.appendChild(script);
-      }
-    });
-
-    return this.apiLoadingPromise;
-  }
-
-  private async ensurePlayer(): Promise<YTPlayerInstance | null> {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return null;
-
-    if (this.canCallPlayer()) {
-      return this.player;
     }
-
-    if (this.readyPromise) {
-      return this.readyPromise;
-    }
-
-    this.readyPromise = (async () => {
-      await this.loadYouTubeIframeApi();
-      if (!window.YT?.Player || !document.body) {
-        this.readyPromise = null;
-        return null;
-      }
-
-      // If a stale player exists whose iframe left document.body, recreate cleanly
-      if (this.player && !this.canCallPlayer()) {
-        try {
-          this.player.destroy?.();
-        } catch {
-          // ignore
-        }
-        this.player = null;
-        this.isPlayerReady = false;
-      }
-
-      const host = this.getOrCreateHost();
-      let mountTarget = document.getElementById(PLAYER_ELEMENT_ID);
-      if (!mountTarget || mountTarget.tagName.toLowerCase() === 'iframe') {
-        host.innerHTML = '';
-        mountTarget = document.createElement('div');
-        mountTarget.id = PLAYER_ELEMENT_ID;
-        mountTarget.style.width = '100%';
-        mountTarget.style.height = '100%';
-        host.appendChild(mountTarget);
-      }
-
-      return new Promise<YTPlayerInstance | null>((resolve) => {
-        this.isPlayerReady = false;
-
-        this.player = new window.YT!.Player(PLAYER_ELEMENT_ID, {
-          width: '160',
-          height: '160',
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            playsinline: 1,
-            rel: 0,
-            iv_load_policy: 3,
-            fs: 0,
-            disablekb: 1,
-            modestbranding: 1,
-            ...(window.location.origin.startsWith('http')
-              ? { origin: window.location.origin }
-              : {}),
-          },
-          events: {
-            onReady: (ev) => {
-              this.player = ev.target;
-              this.isPlayerReady = true;
-              this.syncOverlayBounds();
-
-              if (this.canCallPlayer()) {
-                try {
-                  ev.target.unMute();
-                  ev.target.setVolume(100);
-                } catch {
-                  // ignore
-                }
-              }
-
-              if (this.activeMode === 'youtube' && this.pendingVideoLoad) {
-                const job = this.pendingVideoLoad;
-                this.pendingVideoLoad = null;
-                if (job.autoplay) {
-                  this.loadCandidateVideo(job.videoId, job.startSeconds);
-                } else if (this.canCallPlayer()) {
-                  try {
-                    ev.target.cueVideoById({
-                      videoId: job.videoId,
-                      startSeconds: job.startSeconds,
-                    });
-                  } catch {
-                    // ignore
-                  }
-                }
-              }
-
-              resolve(this.player);
-            },
-            onStateChange: (ev) => {
-              if (this.activeMode !== 'youtube') return;
-              const code = ev.data;
-              if (code === 1) {
-                this.clearWatchdog();
-                this.lastListenSampleAt = Date.now();
-                if (this.canCallPlayer()) {
-                  try {
-                    ev.target.unMute();
-                    ev.target.setVolume(100);
-                  } catch {
-                    // ignore
-                  }
-                }
-                const dur = this.safeGetDuration();
-                this.state = {
-                  ...this.state,
-                  isPlaying: true,
-                  isBuffering: false,
-                  error: null,
-                  duration: dur > 0 ? dur : this.state.duration,
-                };
-                mediaSessionService.updatePlaybackState(true);
-                this.startTicker();
-                this.emit();
-              } else if (code === 2) {
-                this.clearWatchdog();
-                this.stopTicker();
-                this.lastListenSampleAt = 0;
-                this.state = {
-                  ...this.state,
-                  isPlaying: false,
-                  isBuffering: false,
-                };
-                mediaSessionService.updatePlaybackState(false);
-                this.persistNow(true);
-                this.emit();
-              } else if (code === 3) {
-                this.state = {
-                  ...this.state,
-                  isBuffering: true,
-                };
-                this.emit();
-              } else if (code === 0) {
-                this.clearWatchdog();
-                this.stopTicker();
-                this.desiredPlaying = false;
-                this.lastListenSampleAt = 0;
-                this.state = {
-                  ...this.state,
-                  isPlaying: false,
-                  isBuffering: false,
-                  currentTime: this.state.duration,
-                };
-                mediaSessionService.updatePlaybackState(false);
-                this.sampleRealListening(true);
-                this.persistNow(true);
-                this.emit();
-                this.onEndedCallback?.();
-              }
-            },
-            onError: () => {
-              if (this.activeMode !== 'youtube') return;
-              this.clearWatchdog();
-              void this.failoverToNextCandidate();
-            },
-          },
-        });
-      });
-    })();
-
-    return this.readyPromise;
-  }
-
-  private clearWatchdog() {
-    if (this.watchdogTimer !== null) {
-      window.clearTimeout(this.watchdogTimer);
-      this.watchdogTimer = null;
-    }
-  }
-
-  private startWatchdog() {
-    this.clearWatchdog();
-    const expectedVideo = this.candidates[this.candidateIndex];
-    this.watchdogTimer = window.setTimeout(() => {
-      if (!this.desiredPlaying || this.activeMode !== 'youtube') return;
-      if (this.state.videoId !== expectedVideo) return;
-      if (!this.canCallPlayer()) return;
-      try {
-        const ytState = this.player!.getPlayerState?.();
-        if (ytState !== 1) {
-          void this.failoverToNextCandidate();
-        }
-      } catch {
-        void this.failoverToNextCandidate();
-      }
-    }, 2200);
-  }
-
-  private async failoverToNextCandidate() {
-    if (this.candidateIndex + 1 < this.candidates.length) {
-      this.candidateIndex += 1;
-      const nextId = this.candidates[this.candidateIndex];
-      this.state = {
-        ...this.state,
-        videoId: nextId,
-        error: null,
+    if (track.streamUrl) {
+      return {
+        url: track.streamUrl,
+        streamStatus: track.streamStatus === 'full' ? 'full' : 'preview-only',
+        duration: track.duration,
+        audiusId: track.audiusId,
       };
-      this.emit();
-      this.loadCandidateVideo(nextId, this.state.currentTime);
-      return;
     }
-
-    const track = this.activeTrack;
-    if (track) {
-      const startedFallback = await this.tryHtmlFallbackForTrack(
-        track,
-        this.state.currentTime
-      );
-      if (startedFallback) return;
+    if (track.previewUrl) {
+      return {
+        url: track.previewUrl,
+        streamStatus: 'preview-only',
+        duration: track.duration,
+      };
     }
-
-    this.desiredPlaying = false;
-    this.stopTicker();
-    this.state = {
-      ...this.state,
-      isPlaying: false,
-      isBuffering: false,
-      error: 'Unable to play full audio for this track right now.',
-    };
-    this.emit();
+    return null;
   }
 
-  private async playViaHtmlAudio(url: string, startSeconds = 0): Promise<boolean> {
-    const audio = this.ensureHtmlAudio();
-    if (!audio) return false;
-    this.stopYouTubeAudio();
-    this.activeMode = 'html-audio';
-    this.state = {
-      ...this.state,
-      mode: 'html-audio',
-      videoId: null,
-      isBuffering: false,
-      error: null,
-    };
-    this.emit();
-
+  private assignAndPlayAudio(
+    audio: HTMLAudioElement,
+    url: string,
+    startSeconds = 0
+  ): Promise<boolean> {
+    this.isAdvancingTrack = true;
     try {
-      audio.src = url;
+      // Never call removeAttribute('src') + load() between consecutive songs
+      if (audio.src !== url) {
+        audio.src = url;
+      }
       if (startSeconds > 0) {
         const applyStartSeek = () => {
           try {
             audio.currentTime = startSeconds;
           } catch {
-            // ignore
+            // ignore seek range error
           }
         };
         if (audio.readyState >= 1) {
@@ -938,134 +643,43 @@ class UnifiedAudioEngine {
         } else {
           audio.addEventListener('loadedmetadata', applyStartSeek, { once: true });
         }
-      }
-      await audio.play();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async tryHtmlFallbackForTrack(
-    track: ShowcaseTrack,
-    startSeconds = 0
-  ): Promise<boolean> {
-    if (track.streamUrl) {
-      if (await this.playViaHtmlAudio(track.streamUrl, startSeconds)) return true;
-    }
-    try {
-      const audiusUpgraded = await resolveFullAudiusTrack(track);
-      if (audiusUpgraded.streamUrl) {
-        if (await this.playViaHtmlAudio(audiusUpgraded.streamUrl, startSeconds)) {
-          return true;
+      } else {
+        try {
+          if (audio.readyState >= 1) audio.currentTime = 0;
+        } catch {
+          // ignore
         }
       }
-    } catch {
-      // ignore
-    }
-    if (track.previewUrl) {
-      if (await this.playViaHtmlAudio(track.previewUrl, startSeconds)) return true;
-    }
-    return false;
-  }
 
-  private loadCandidateVideo(videoId: string, startSeconds = 0) {
-    this.stopHtmlAudio();
-    this.activeMode = 'youtube';
-    this.state = {
-      ...this.state,
-      mode: 'youtube',
-      videoId,
-      isBuffering: false,
-      error: null,
-    };
-    this.emit();
-
-    if (!this.canCallPlayer()) {
-      this.pendingVideoLoad = { videoId, startSeconds, autoplay: true };
-      if (!this.readyPromise) {
-        this.isPlayerReady = false;
-      } else if (this.isPlayerReady) {
-        // Player existed previously but its iframe is no longer in DOM -> re-init
-        this.isPlayerReady = false;
-        this.readyPromise = null;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        return playPromise
+          .then(() => {
+            this.isAdvancingTrack = false;
+            this.runFadeInRamp(audio);
+            return true;
+          })
+          .catch(() => {
+            this.isAdvancingTrack = false;
+            return false;
+          });
       }
-      void this.ensurePlayer();
-      return;
-    }
-
-    try {
-      this.player!.unMute();
-      this.player!.setVolume(100);
-      this.player!.loadVideoById({ videoId, startSeconds });
-      this.startWatchdog();
+      this.isAdvancingTrack = false;
+      return Promise.resolve(true);
     } catch {
-      void this.failoverToNextCandidate();
-    }
-  }
-
-  private startTicker() {
-    if (this.tickTimer !== null) return;
-    this.tickTimer = window.setInterval(() => {
-      if (this.activeMode !== 'youtube' || !this.canCallPlayer()) return;
-      const currentTime = this.getCurrentTime();
-      const dur = this.safeGetDuration();
-      const effectiveDur = dur > 0 ? dur : this.state.duration;
-      if (
-        Math.abs(currentTime - this.state.currentTime) >= 0.08 ||
-        (dur > 0 && Math.abs(dur - this.state.duration) >= 0.5)
-      ) {
-        this.state = {
-          ...this.state,
-          currentTime,
-          duration: effectiveDur,
-        };
-        this.emit();
-      }
-      mediaSessionService.updatePositionState(currentTime, effectiveDur);
-      this.sampleRealListening(false);
-      this.persistNow(false);
-    }, 250);
-  }
-
-  private stopTicker() {
-    if (this.tickTimer !== null) {
-      window.clearInterval(this.tickTimer);
-      this.tickTimer = null;
-    }
-  }
-
-  private safeGetDuration(): number {
-    if (this.activeMode === 'html-audio') {
-      const d = this.htmlAudio?.duration ?? 0;
-      return Number.isFinite(d) && d > 0 ? d : 0;
-    }
-    if (!this.canCallPlayer()) return 0;
-    try {
-      const d = this.player!.getDuration?.() ?? 0;
-      return Number.isFinite(d) && d > 0 ? d : 0;
-    } catch {
-      return 0;
+      this.isAdvancingTrack = false;
+      return Promise.resolve(false);
     }
   }
 
   public getCurrentTime(): number {
-    if (this.activeMode === 'html-audio') {
-      const t = this.htmlAudio?.currentTime ?? this.state.currentTime;
-      return Number.isFinite(t) && t >= 0 ? t : this.state.currentTime;
-    }
-    if (!this.canCallPlayer()) return this.state.currentTime;
-    try {
-      const t = this.player!.getCurrentTime?.() ?? this.state.currentTime;
-      return Number.isFinite(t) && t >= 0 ? t : this.state.currentTime;
-    } catch {
-      return this.state.currentTime;
-    }
+    const t = this.htmlAudio?.currentTime ?? this.state.currentTime;
+    return Number.isFinite(t) && t >= 0 ? t : this.state.currentTime;
   }
 
   public getDuration(): number {
-    const d = this.safeGetDuration();
-    return d > 0 ? d : this.state.duration;
+    const d = this.htmlAudio?.duration ?? 0;
+    return Number.isFinite(d) && d > 0 ? d : this.state.duration;
   }
 
   public async playTrack(track: ShowcaseTrack, startSeconds = 0) {
@@ -1074,8 +688,6 @@ class UnifiedAudioEngine {
       this.activeTrack?.id === track.id && !this.desiredPlaying && startSeconds > 0;
     this.activeTrack = track;
     this.desiredPlaying = true;
-    this.stopTicker();
-    this.clearWatchdog();
 
     if (!isSameTrackResume) {
       this.streamRecordedForSession = false;
@@ -1083,12 +695,12 @@ class UnifiedAudioEngine {
     }
     this.lastListenSampleAt = Date.now();
 
-    const safeStart = Math.max(0, Math.floor(startSeconds || 0));
+    const safeStart = Math.max(0, startSeconds || 0);
+    const immediate = this.getBestImmediateUrl(track);
 
     this.state = {
       trackId: track.id,
-      videoId: track.youtubeVideoId ?? null,
-      mode: 'youtube',
+      mode: 'html-audio',
       isPlaying: false,
       isBuffering: true,
       currentTime: safeStart,
@@ -1100,103 +712,223 @@ class UnifiedAudioEngine {
     this.persistNow(true);
     this.emit();
 
-    const preattachedIds =
-      track.youtubeCandidates && track.youtubeCandidates.length > 0
-        ? track.youtubeCandidates
-        : track.youtubeVideoId
-        ? [track.youtubeVideoId]
-        : null;
+    const audio = this.ensureHtmlAudio();
+    if (!audio) {
+      this.desiredPlaying = false;
+      this.state = {
+        ...this.state,
+        isPlaying: false,
+        isBuffering: false,
+        error: 'audio playback is not supported in this browser.',
+      };
+      this.emit();
+      return;
+    }
 
-    // Race offline IndexedDB check, YouTube player initialization, and candidate resolution concurrently
-    const [offlineUrl, _, resolvedIds] = await Promise.all([
-      getOfflineAudioUrl(track.id, this.currentUid),
-      this.ensurePlayer(),
-      preattachedIds
-        ? Promise.resolve(preattachedIds)
-        : resolveYouTubeCandidates(
-            track.title,
-            track.artist,
-            track.youtubeVideoId,
-            track.duration
-          ),
+    // Start immediate cached/stream/preview audio synchronously in the same tick as user tap or ended event
+    let startedImmediate = false;
+    if (immediate?.url) {
+      startedImmediate = await this.assignAndPlayAudio(
+        audio,
+        immediate.url,
+        safeStart < 29 || immediate.streamStatus === 'full' ? safeStart : 0
+      );
+      if (seq !== this.resolveSeq || this.activeTrack?.id !== track.id) return;
+      if (startedImmediate && immediate.streamStatus === 'full') {
+        const updatedTrack: ShowcaseTrack = {
+          ...track,
+          streamUrl: immediate.url,
+          audiusId: immediate.audiusId ?? track.audiusId,
+          duration: immediate.duration || track.duration,
+          streamStatus: 'full',
+        };
+        this.activeTrack = updatedTrack;
+        this.onTrackStreamResolvedCallback?.(updatedTrack);
+        this.preloadNextFromQueue();
+        return;
+      }
+    }
+
+    // Check offline IndexedDB blob & SimpMusic-style full-track stream resolver concurrently
+    const [offlineUrl, resolvedStream] = await Promise.all([
+      getOfflineAudioUrl(track.id, this.currentUid).catch(() => null),
+      resolveFullAudioStream(track, this.preferredQualityTier).catch(() => null),
     ]);
 
     if (seq !== this.resolveSeq || this.activeTrack?.id !== track.id) return;
 
-    // Priority 1: Real offline IndexedDB Blob URL if saved offline
     if (offlineUrl) {
-      const ok = await this.playViaHtmlAudio(offlineUrl, startSeconds);
-      if (ok) return;
-    }
-
-    if (seq !== this.resolveSeq || this.activeTrack?.id !== track.id) return;
-
-    // Priority 2: YouTube IFrame full audio stream
-    if (resolvedIds.length > 0) {
-      this.candidates = resolvedIds;
-      this.candidateIndex = 0;
-
-      if (!this.canCallPlayer()) {
-        this.isPlayerReady = false;
-        this.readyPromise = null;
-        await this.ensurePlayer();
+      this.preResolvedCache.set(track.id, {
+        url: offlineUrl,
+        streamStatus: 'full',
+        duration: track.duration,
+      });
+      const resumeAt = startedImmediate ? this.getCurrentTime() : safeStart;
+      const ok = await this.assignAndPlayAudio(audio, offlineUrl, resumeAt);
+      if (ok) {
+        const updated: ShowcaseTrack = {
+          ...track,
+          streamStatus: 'full',
+        };
+        this.activeTrack = updated;
+        this.onTrackStreamResolvedCallback?.(updated);
+        this.preloadNextFromQueue();
+        return;
       }
-      if (seq !== this.resolveSeq || this.activeTrack?.id !== track.id) return;
-
-      this.loadCandidateVideo(resolvedIds[0], startSeconds);
-      return;
     }
 
-    // Priority 3: Audius HTML5 / iTunes preview fallback
-    const htmlStarted = await this.tryHtmlFallbackForTrack(track, startSeconds);
-    if (seq !== this.resolveSeq || this.activeTrack?.id !== track.id) return;
-    if (htmlStarted) return;
+    if (resolvedStream?.streamUrl && resolvedStream.source !== 'itunes-preview') {
+      const nextDuration =
+        resolvedStream.durationSec > 0 ? resolvedStream.durationSec : track.duration;
+      this.preResolvedCache.set(track.id, {
+        url: resolvedStream.streamUrl,
+        streamStatus: 'full',
+        streamSource: resolvedStream.source,
+        duration: nextDuration,
+      });
+      const resumeAt = startedImmediate ? this.getCurrentTime() : safeStart;
+      const ok = await this.assignAndPlayAudio(audio, resolvedStream.streamUrl, resumeAt);
+      if (ok) {
+        const updatedTrack: ShowcaseTrack = {
+          ...track,
+          streamUrl: resolvedStream.streamUrl,
+          fullDuration: nextDuration,
+          duration: nextDuration,
+          durationMs: nextDuration * 1000,
+          streamStatus: 'full',
+          streamSource: resolvedStream.source,
+        };
+        this.activeTrack = updatedTrack;
+        this.onTrackStreamResolvedCallback?.(updatedTrack);
+        this.preloadNextFromQueue();
+        return;
+      }
+    }
 
-    this.desiredPlaying = false;
-    this.state = {
-      ...this.state,
-      isPlaying: false,
-      isBuffering: false,
-      error: 'No playable audio source matched this track.',
-    };
-    this.emit();
+    // Fallback: remain on or start iTunes 30s previewUrl
+    if (track.previewUrl) {
+      this.preResolvedCache.set(track.id, {
+        url: track.previewUrl,
+        streamStatus: 'preview-only',
+        streamSource: 'itunes-preview',
+        duration: 30,
+      });
+      const previewTrack: ShowcaseTrack = {
+        ...track,
+        streamStatus: 'preview-only',
+        streamSource: 'itunes-preview',
+      };
+      this.activeTrack = previewTrack;
+      this.onTrackStreamResolvedCallback?.(previewTrack);
+
+      if (startedImmediate) {
+        this.preloadNextFromQueue();
+        return;
+      }
+      const ok = await this.assignAndPlayAudio(
+        audio,
+        track.previewUrl,
+        safeStart < 29 ? safeStart : 0
+      );
+      if (ok) {
+        this.preloadNextFromQueue();
+        return;
+      }
+    }
+
+    if (!startedImmediate) {
+      this.desiredPlaying = false;
+      this.state = {
+        ...this.state,
+        isPlaying: false,
+        isBuffering: false,
+        error: 'no playable audio source matched this track.',
+      };
+      mediaSessionService.updatePlaybackState(false);
+      this.emit();
+    }
   }
 
   public preloadTrack(track: ShowcaseTrack) {
     if (
-      track.youtubeVideoId ||
-      (track.youtubeCandidates && track.youtubeCandidates.length > 0)
+      this.preResolvedCache.has(track.id) ||
+      this.preloadingIds.has(track.id)
     ) {
       return;
     }
-    void resolveYouTubeCandidates(
-      track.title,
-      track.artist,
-      undefined,
-      track.duration
-    ).catch(() => undefined);
+    if (track.streamUrl && track.streamStatus === 'full') {
+      this.preResolvedCache.set(track.id, {
+        url: track.streamUrl,
+        streamStatus: 'full',
+        duration: track.duration,
+        audiusId: track.audiusId,
+      });
+      return;
+    }
+    preloadFullAudioStream(track, this.preferredQualityTier);
+    this.preloadingIds.add(track.id);
+    void (async () => {
+      try {
+        const offline = await getOfflineAudioUrl(track.id, this.currentUid).catch(
+          () => null
+        );
+        if (offline) {
+          this.preResolvedCache.set(track.id, {
+            url: offline,
+            streamStatus: 'full',
+            duration: track.duration,
+          });
+          return;
+        }
+        const resolved = await resolveFullAudioStream(track, this.preferredQualityTier);
+        if (resolved?.streamUrl && resolved.source !== 'itunes-preview') {
+          const nextDur = resolved.durationSec > 0 ? resolved.durationSec : track.duration;
+          this.preResolvedCache.set(track.id, {
+            url: resolved.streamUrl,
+            streamStatus: 'full',
+            streamSource: resolved.source,
+            duration: nextDur,
+          });
+          queueManager.syncTrackMetadata({
+            ...track,
+            streamUrl: resolved.streamUrl,
+            fullDuration: nextDur,
+            duration: nextDur,
+            durationMs: nextDur * 1000,
+            streamStatus: 'full',
+            streamSource: resolved.source,
+          });
+        } else if (track.previewUrl) {
+          this.preResolvedCache.set(track.id, {
+            url: track.previewUrl,
+            streamStatus: 'preview-only',
+            streamSource: 'itunes-preview',
+            duration: 30,
+          });
+        }
+      } catch {
+        if (track.previewUrl) {
+          this.preResolvedCache.set(track.id, {
+            url: track.previewUrl,
+            streamStatus: 'preview-only',
+            streamSource: 'itunes-preview',
+            duration: 30,
+          });
+        }
+      } finally {
+        this.preloadingIds.delete(track.id);
+      }
+    })();
   }
 
   public pause() {
     this.desiredPlaying = false;
-    this.clearWatchdog();
-    this.stopTicker();
+    this.isAdvancingTrack = false;
     this.lastListenSampleAt = 0;
-    if (this.pendingVideoLoad) {
-      this.pendingVideoLoad = { ...this.pendingVideoLoad, autoplay: false };
-    }
-    if (this.activeMode === 'html-audio') {
-      try {
-        this.htmlAudio?.pause();
-      } catch {
-        // ignore
-      }
-    } else if (this.canCallPlayer()) {
-      try {
-        this.player!.pauseVideo();
-      } catch {
-        // ignore
-      }
+    try {
+      this.htmlAudio?.pause();
+    } catch {
+      // ignore
     }
     this.state = {
       ...this.state,
@@ -1214,10 +946,11 @@ class UnifiedAudioEngine {
     this.lastListenSampleAt = Date.now();
     mediaSessionService.updateMetadata(this.activeTrack);
     mediaSessionService.updatePlaybackState(true);
-    if (this.activeMode === 'html-audio' && this.htmlAudio?.src) {
+
+    if (this.htmlAudio?.src) {
       try {
         await this.htmlAudio.play();
-        this.state = { ...this.state, isPlaying: true, error: null };
+        this.state = { ...this.state, isPlaying: true, isBuffering: false, error: null };
         this.emit();
         return;
       } catch {
@@ -1225,44 +958,8 @@ class UnifiedAudioEngine {
       }
     }
 
-    // If restored on boot and YT player hasn't loaded this track yet, resume at exact saved second
-    if (
-      (!this.state.videoId && this.candidates.length === 0) ||
-      (!this.canCallPlayer() && this.candidates.length === 0)
-    ) {
-      const resumeAt = Math.max(0, Math.floor(this.state.currentTime || 0));
-      await this.playTrack(this.activeTrack, resumeAt);
-      return;
-    }
-
-    if (!this.canCallPlayer()) {
-      const resumeAt = Math.max(0, Math.floor(this.state.currentTime || 0));
-      await this.playTrack(this.activeTrack, resumeAt);
-      return;
-    }
-
-    if (this.canCallPlayer()) {
-      try {
-        this.player!.unMute();
-        this.player!.setVolume(100);
-        this.player!.playVideo();
-        this.startTicker();
-        this.state = { ...this.state, isPlaying: true, error: null };
-        this.emit();
-      } catch {
-        if (this.state.videoId) {
-          this.loadCandidateVideo(
-            this.state.videoId,
-            Math.max(0, Math.floor(this.state.currentTime || 0))
-          );
-        }
-      }
-    } else if (this.state.videoId) {
-      this.loadCandidateVideo(
-        this.state.videoId,
-        Math.max(0, Math.floor(this.state.currentTime || 0))
-      );
-    }
+    const resumeAt = Math.max(0, Math.floor(this.state.currentTime || 0));
+    await this.playTrack(this.activeTrack, resumeAt);
   }
 
   public togglePlay() {
@@ -1281,23 +978,12 @@ class UnifiedAudioEngine {
     this.persistNow(true);
     this.emit();
 
-    if (this.activeMode === 'html-audio' && this.htmlAudio) {
+    if (this.htmlAudio) {
       try {
         this.htmlAudio.currentTime = clamped;
       } catch {
         // ignore
       }
-      return;
-    }
-
-    if (this.canCallPlayer()) {
-      try {
-        this.player!.seekTo(clamped, true);
-      } catch {
-        // ignore
-      }
-    } else if (this.pendingVideoLoad) {
-      this.pendingVideoLoad = { ...this.pendingVideoLoad, startSeconds: clamped };
     }
   }
 

@@ -351,24 +351,24 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
     return (
       <div className="relative w-full h-full bg-black flex items-center justify-center p-6">
         {feedLoading ? (
-          <div className="w-full max-w-md aspect-[9/14] rounded-3xl bg-[#0E0E10] border border-white/10 p-6 flex flex-col justify-end space-y-3 animate-pulse">
+          <div className="ather-depth-card w-full max-w-md aspect-[9/14] rounded-3xl p-6 flex flex-col justify-end space-y-3 animate-pulse">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-white/10" />
+              <div className="w-12 h-12 rounded-full bg-[#141418] border border-[#242429]" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 w-2/3 rounded bg-white/10" />
-                <div className="h-3 w-1/2 rounded bg-white/[0.06]" />
+                <div className="h-4 w-2/3 rounded bg-[#141418]" />
+                <div className="h-3 w-1/2 rounded bg-[#141418]" />
               </div>
             </div>
           </div>
         ) : (
-          <div className="max-w-sm rounded-3xl bg-[#0E0E10] border border-white/15 p-6 text-center space-y-2">
+          <div className="ather-depth-card max-w-sm rounded-3xl p-6 text-center space-y-2">
             <h2 className="text-base font-extrabold text-white">
-              {isOffline ? 'Reels unavailable offline' : 'No previews loaded'}
+              {isOffline ? 'reels unavailable offline' : 'no previews loaded'}
             </h2>
-            <p className="text-xs text-white/55">
+            <p className="text-xs font-semibold text-[#A1A1AA]">
               {isOffline
-                ? 'Reconnect to browse 30-second song previews and upgrade full streams.'
-                : 'Live iTunes previews will appear here as soon as the catalog finishes loading.'}
+                ? 'reconnect to browse 30-second song previews and stream full tracks.'
+                : 'live previews will appear here as soon as the catalog finishes loading.'}
             </p>
           </div>
         )}
@@ -377,7 +377,7 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
   }
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div className="relative w-full h-[100dvh] bg-black overflow-hidden">
       {/* Dedicated active-Reel <audio> player (auto-plays visible Reel, pauses when away) */}
       <audio ref={reelAudioRef} preload="auto" loop={!autoScroll} />
 
@@ -398,12 +398,12 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                 cardRefs.current[idx] = el;
               }}
               data-reel-idx={idx}
-              className="relative w-full h-full shrink-0 snap-start overflow-hidden bg-[#0D0D0F]"
+              className="relative w-full h-[100dvh] shrink-0 snap-start overflow-hidden bg-black"
             >
-              {/* Full-Bleed 600x600bb Cover Visual Canvas (tap toggles preview pause/play) */}
+              {/* Full-Bleed Cover Visual Canvas (tap toggles preview pause/play) */}
               <button
                 type="button"
-                aria-label={userPaused ? 'Resume preview' : 'Pause preview'}
+                aria-label={userPaused ? 'resume preview' : 'pause preview'}
                 onClick={() => setUserPaused((p) => !p)}
                 className="absolute inset-0 w-full h-full overflow-hidden text-left cursor-pointer"
               >
@@ -411,44 +411,42 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                   style={track.artwork}
                   coverUrl={track.coverUrl}
                   alt={track.title}
-                  className={`w-full h-full transition-transform duration-[6000ms] ease-out ${
-                    isActiveReel && !userPaused ? 'scale-105' : 'scale-100'
-                  }`}
+                  className="w-full h-full"
                 />
 
                 {/* Top & Bottom Scrim for Crisp Legibility */}
                 <div
                   aria-hidden="true"
-                  className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/75 to-transparent pointer-events-none"
+                  className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/80 to-transparent pointer-events-none"
                 />
                 <div
                   aria-hidden="true"
-                  className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/95 via-black/55 to-transparent pointer-events-none"
+                  className="absolute inset-x-0 bottom-0 h-68 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none"
                 />
               </button>
 
               {/* Top Bar: Paused indicator only when paused */}
               {userPaused && isActiveReel && (
                 <div className="absolute top-[max(1.25rem,env(safe-area-inset-top))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-20 flex items-center justify-start pointer-events-none">
-                  <span className="px-2.5 py-1 rounded-full bg-black/75 border border-white/20 text-[10px] font-bold text-white inline-flex items-center gap-1">
+                  <span className="ather-depth-pill px-3 py-1 rounded-full text-[11px] font-extrabold text-white inline-flex items-center gap-1.5">
                     <PauseGlyph className="w-3 h-3" />
-                    <span>Paused</span>
+                    <span>paused</span>
                   </span>
                 </div>
               )}
 
-              {/* Bottom Layout: Left Creator/Track Info (no dates) + Right Action Rail */}
+              {/* Bottom Layout: Left Creator/Track Info + Right Action Rail */}
               <div
                 className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-20 flex items-end justify-between gap-4 pointer-events-none"
-                style={{ bottom: `${Math.max(bottomClearance + 22, 104)}px` }}
+                style={{ bottom: `${Math.max(bottomClearance + 22, 108)}px` }}
               >
                 <div className="min-w-0 flex-1 space-y-2 pb-1 pointer-events-auto">
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       type="button"
-                      aria-label={`Open ${track.artist} profile`}
+                      aria-label={`open ${track.artist.toLowerCase()} profile`}
                       onClick={() => onOpenArtist(track.artist)}
-                      className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/35 shrink-0 shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      className="w-12 h-12 rounded-full overflow-hidden border border-[#242429] shrink-0 hover:border-white hover:scale-105 active:scale-95 transition-transform"
                     >
                       <ShowcaseArtwork
                         style={track.artwork}
@@ -463,31 +461,31 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectTrack(track, true, 0)}
-                        className="block max-w-full text-base sm:text-lg font-extrabold text-white truncate leading-tight text-left hover:text-white/80 transition-colors"
+                        className="block max-w-full text-base sm:text-lg font-extrabold text-white truncate leading-tight text-left hover:opacity-80 transition-opacity"
                       >
-                        {track.title}
+                        {track.title.toLowerCase()}
                       </button>
                       <button
                         type="button"
                         onClick={() => onOpenArtist(track.artist)}
-                        className="block max-w-full text-xs font-semibold text-white/80 hover:text-white hover:underline truncate mt-0.5 leading-tight text-left transition-colors"
+                        className="block max-w-full text-xs font-semibold text-[#E4E4E7] hover:text-white hover:underline truncate mt-0.5 leading-tight text-left transition-colors"
                       >
-                        {formatHandle(track.artist)} · {track.artist}
+                        {formatHandle(track.artist)} · {track.artist.toLowerCase()}
                       </button>
                     </div>
                   </div>
 
-                  <p className="text-xs text-white/70 truncate pl-0.5">
-                    {track.album} · {track.category}
+                  <p className="text-xs text-[#A1A1AA] truncate pl-0.5">
+                    {track.album.toLowerCase()} · {track.category.toLowerCase()}
                   </p>
                 </div>
 
-                {/* Right-Side Floating Frosted Vertical Rail: Play Full Track, Download, +, Card Switcher */}
-                <div className="pointer-events-auto rounded-full bg-[#141416]/85 backdrop-blur-xl border border-white/20 p-1.5 flex flex-col items-center gap-2 shadow-[0_14px_34px_rgba(0,0,0,0.75)] shrink-0">
+                {/* Right-Side Floating Vertical Rail: Play Full Track, Download, +, Card Switcher */}
+                <div className="ather-depth-card pointer-events-auto rounded-full p-1.5 flex flex-col items-center gap-2 shrink-0">
                   <motion.button
                     type="button"
-                    aria-label={`Play full track ${track.title}`}
-                    title="Play Full Track"
+                    aria-label={`play full track ${track.title}`}
+                    title="play full track"
                     whileTap={{ scale: 0.88 }}
                     transition={{ type: 'spring', stiffness: 480, damping: 22 }}
                     onClick={async () => {
@@ -499,33 +497,33 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                         setResolvingBusyId(null);
                       }
                     }}
-                    className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-all shadow-md touch-manipulation"
+                    className="ather-acid-btn w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation"
                   >
                     <PlayGlyph className="w-5 h-5 translate-x-[1px]" />
                   </motion.button>
 
                   <motion.button
                     type="button"
-                    aria-label={`Add full song ${track.title} to an existing playlist`}
-                    title="Add to Playlist"
-                    whileTap={{ scale: 0.88 }}
-                    transition={{ type: 'spring', stiffness: 480, damping: 22 }}
+                    aria-label={`add full song ${track.title.toLowerCase()} to an existing playlist`}
+                    title="add to playlist"
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.14 }}
                     onClick={() => {
                       setAddedFeedback(null);
                       setPickerTrack(track);
                     }}
-                    className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors shadow-md touch-manipulation"
+                    className="ather-depth-btn w-11 h-11 rounded-full text-white hover:border-white flex items-center justify-center transition-colors touch-manipulation"
                   >
                     <PlusGlyph className="w-5 h-5" />
                   </motion.button>
 
                   <motion.button
                     type="button"
-                    aria-label={isSaved ? 'Remove download' : 'Download full song'}
-                    title={isSaved ? 'Saved offline' : 'Download / Save'}
-                    whileTap={{ scale: 0.88 }}
+                    aria-label={isSaved ? 'remove download' : 'download full song'}
+                    title={isSaved ? 'saved offline' : 'download / save'}
+                    whileTap={{ scale: 0.9 }}
                     disabled={isBusy}
-                    transition={{ type: 'spring', stiffness: 480, damping: 22 }}
+                    transition={{ duration: 0.14 }}
                     onClick={async () => {
                       setResolvingBusyId(track.id);
                       try {
@@ -534,10 +532,10 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                         setResolvingBusyId(null);
                       }
                     }}
-                    className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors touch-manipulation ${
+                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors touch-manipulation ${
                       isSaved
-                        ? 'bg-white text-black border-white'
-                        : 'bg-white/10 text-white border-white/15 hover:bg-white/20'
+                        ? 'ather-acid-btn'
+                        : 'ather-depth-btn text-white hover:border-white'
                     }`}
                   >
                     {isSaved ? (
@@ -549,23 +547,23 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
 
                   <motion.button
                     type="button"
-                    aria-label="Open reel card switcher"
-                    title="Card Switcher"
-                    whileTap={{ scale: 0.88 }}
-                    transition={{ type: 'spring', stiffness: 480, damping: 22 }}
+                    aria-label="open reel card switcher"
+                    title="card switcher"
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.14 }}
                     onClick={() => setCardSwitcherOpen(true)}
-                    className="w-11 h-11 rounded-full bg-white/10 text-white border border-white/15 flex items-center justify-center hover:bg-white/20 transition-colors touch-manipulation"
+                    className="ather-depth-btn w-11 h-11 rounded-full text-white hover:border-white flex items-center justify-center transition-colors touch-manipulation"
                   >
                     <CardSwitcherGlyph className="w-5 h-5" active={cardSwitcherOpen} />
                   </motion.button>
                 </div>
               </div>
 
-              {/* Subtle 2px Hairline Reel Duration Progress for Autoscroll */}
+              {/* Reel Duration Progress Bar for Autoscroll */}
               <div
                 aria-hidden="true"
-                className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-20 h-[2px] bg-white/15 rounded-full overflow-hidden pointer-events-none"
-                style={{ bottom: `${Math.max(bottomClearance + 10, 92)}px` }}
+                className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-20 h-[3px] bg-white/20 rounded-full overflow-hidden pointer-events-none"
+                style={{ bottom: `${Math.max(bottomClearance + 10, 94)}px` }}
               >
                 <div
                   className="h-full bg-white rounded-full transition-[width] duration-100 linear"
@@ -581,31 +579,31 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
       {cardSwitcherOpen && (
         <PopupSheet
           onClose={() => setCardSwitcherOpen(false)}
-          ariaLabel="Reel Card Switcher"
+          ariaLabel="reel card switcher"
           variant="bottom"
           maxWidthClass="max-w-lg"
           maxHeightClass="max-h-[min(82dvh,calc(100dvh-max(1rem,env(safe-area-inset-top))-0.75rem))]"
         >
-          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-[#242429] shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shrink-0">
+              <span className="ather-acid-btn w-9 h-9 rounded-full flex items-center justify-center shrink-0">
                 <CardSwitcherGlyph className="w-4 h-4" active={true} />
               </span>
               <div className="min-w-0">
                 <h2 className="text-base font-extrabold text-white truncate">
-                  Reel Cards
+                  reel cards
                 </h2>
-                <p className="text-xs text-white/55 truncate">
-                  Tap any card to jump directly to that preview
+                <p className="text-xs font-semibold text-[#A1A1AA] truncate">
+                  tap any card to jump directly to that preview
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              aria-label="Close card switcher"
+              aria-label="close card switcher"
               onClick={() => setCardSwitcherOpen(false)}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors"
+              className="ather-depth-btn w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0 transition-colors"
             >
               <CloseGlyph className="w-4 h-4" />
             </button>
@@ -620,10 +618,10 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                     key={`${track.id}-${idx}`}
                     type="button"
                     onClick={() => jumpToBaseReel(idx)}
-                    className={`group relative shrink-0 w-32 h-48 rounded-2xl overflow-hidden border text-left transition-all active:scale-95 ${
+                    className={`group relative shrink-0 w-32 h-48 rounded-2xl overflow-hidden border text-left transition-colors active:scale-95 ${
                       isCurrent
-                        ? 'border-white ring-2 ring-white'
-                        : 'border-white/15 hover:border-white/45'
+                        ? 'border-white'
+                        : 'border-[#242429] hover:border-white/70'
                     }`}
                   >
                     <ShowcaseArtwork
@@ -635,19 +633,19 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                     />
                     <div
                       aria-hidden="true"
-                      className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent"
+                      className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent"
                     />
                     {isCurrent && (
-                      <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-white text-black text-[10px] font-extrabold">
-                        Playing
+                      <span className="ather-acid-btn absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold">
+                        playing
                       </span>
                     )}
                     <div className="absolute inset-x-2.5 bottom-2.5 space-y-0.5">
                       <div className="text-xs font-extrabold text-white truncate">
-                        {track.title}
+                        {track.title.toLowerCase()}
                       </div>
-                      <div className="text-[10px] font-medium text-white/70 truncate">
-                        {track.artist}
+                      <div className="text-[10px] font-medium text-[#A1A1AA] truncate">
+                        {track.artist.toLowerCase()}
                       </div>
                     </div>
                   </button>
@@ -662,14 +660,14 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
       {pickerTrack && (
         <PopupSheet
           onClose={() => setPickerTrack(null)}
-          ariaLabel="Add to Playlist"
+          ariaLabel="add to playlist"
           variant="bottom"
           maxWidthClass="max-w-md"
           maxHeightClass="max-h-[82dvh]"
         >
-          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-[#242429] shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/15 shrink-0">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#242429] shrink-0">
                 <ShowcaseArtwork
                   style={pickerTrack.artwork}
                   coverUrl={pickerTrack.coverUrl}
@@ -680,19 +678,19 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
               </div>
               <div className="min-w-0">
                 <h2 className="text-base font-extrabold text-white truncate">
-                  Add to Playlist
+                  add to playlist
                 </h2>
-                <p className="text-xs text-white/55 truncate mt-0.5">
-                  {pickerTrack.title} · {pickerTrack.artist}
+                <p className="text-xs font-semibold text-[#A1A1AA] truncate mt-0.5">
+                  {pickerTrack.title.toLowerCase()} · {pickerTrack.artist.toLowerCase()}
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              aria-label="Close playlist picker"
+              aria-label="close playlist picker"
               onClick={() => setPickerTrack(null)}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors"
+              className="ather-depth-btn w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0 transition-colors"
             >
               <CloseGlyph className="w-4 h-4" />
             </button>
@@ -700,15 +698,15 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
 
           <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto no-scrollbar">
             {addedFeedback && (
-              <div className="rounded-2xl bg-white text-black px-3.5 py-2.5 text-xs font-extrabold flex items-center gap-2">
+              <div className="ather-acid-btn rounded-2xl px-3.5 py-2.5 text-xs font-extrabold flex items-center gap-2">
                 <CheckGlyph className="w-4 h-4 shrink-0" />
-                <span className="truncate">{addedFeedback}</span>
+                <span className="truncate">{addedFeedback.toLowerCase()}</span>
               </div>
             )}
 
             {playlists.length === 0 ? (
-              <p className="text-xs text-white/55 py-8 text-center">
-                No playlists yet. Create one under Library → Playlists first.
+              <p className="text-xs font-bold text-[#A1A1AA] py-8 text-center">
+                no playlists yet. create one under library → playlists first.
               </p>
             ) : (
               <div className="space-y-2">
@@ -730,16 +728,16 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                         try {
                           await onAddTrackToPlaylist(pl.id, pickerTrack);
                           setAddedFeedback(
-                            `Added “${pickerTrack.title}” to ${pl.name}`
+                            `added “${pickerTrack.title}” to ${pl.name}`
                           );
                         } finally {
                           setResolvingBusyId(null);
                         }
                       }}
-                      className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-2xl bg-black/75 border border-white/12 hover:border-white/35 text-left transition-colors"
+                      className="ather-depth-row w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-2xl text-left transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-white/10">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-[#242429]">
                           <PlaylistCover
                             coverImageUrl={pl.coverImageUrl}
                             coverArtwork={pl.coverArtwork}
@@ -751,12 +749,12 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                           />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-bold text-white truncate">
-                            {pl.name}
+                          <div className="text-sm font-extrabold text-white truncate">
+                            {pl.name.toLowerCase()}
                           </div>
-                          <div className="text-xs text-white/55 tabular-nums">
+                          <div className="text-xs font-semibold text-[#A1A1AA] tabular-nums">
                             {busy
-                              ? 'Adding...'
+                              ? 'adding...'
                               : `${pl.trackIds.length} ${
                                   pl.trackIds.length === 1 ? 'song' : 'songs'
                                 }`}
@@ -767,8 +765,8 @@ export const ReelsScreen: React.FC<ReelsScreenProps> = ({
                       <span
                         className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
                           alreadyIn
-                            ? 'bg-white text-black'
-                            : 'bg-white/10 text-white'
+                            ? 'ather-acid-btn'
+                            : 'ather-depth-btn text-white'
                         }`}
                       >
                         {alreadyIn ? (

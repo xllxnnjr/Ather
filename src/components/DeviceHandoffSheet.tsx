@@ -69,8 +69,8 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
     sharedPlayback?.activeDeviceId !== localDeviceId;
 
   const activeBrowserOutputName =
-    browserOutputs.find((d) => d.id === activeBrowserOutputId)?.name ??
-    'This Device';
+    browserOutputs.find((d) => d.id === activeBrowserOutputId)?.name.toLowerCase() ??
+    'this device';
 
   const remoteTrack = sharedPlayback?.track ?? currentTrack;
   const onlineCount = accountDevices.filter(
@@ -80,33 +80,33 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
   return (
     <PopupSheet
       onClose={onClose}
-      ariaLabel="Connect to a Device"
+      ariaLabel="active devices"
       variant="bottom"
       maxWidthClass="max-w-lg"
       maxHeightClass="max-h-[min(84dvh,calc(100dvh-max(1rem,env(safe-area-inset-top))-0.75rem))]"
     >
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/20 shrink-0">
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#242429] shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shrink-0">
+          <span className="ather-acid-btn w-10 h-10 rounded-full flex items-center justify-center shrink-0">
             <DevicesGlyph className="w-5 h-5" active={true} />
           </span>
           <div className="min-w-0">
             <h3 className="text-base font-extrabold text-white truncate">
-              Account Devices &amp; Handoff
+              active devices
             </h3>
-            <p className="text-xs text-white/75 font-bold truncate mt-0.5">
+            <p className="text-xs text-[#A1A1AA] font-bold truncate mt-0.5">
               {isPlayingRemotely
-                ? `Active on ${sharedPlayback?.activeDeviceName || 'Another Device'}`
-                : `Active on ${activeBrowserOutputName}`}
+                ? `active on ${(sharedPlayback?.activeDeviceName || 'another device').toLowerCase()}`
+                : `active on ${activeBrowserOutputName}`}
             </p>
           </div>
         </div>
 
         <button
           type="button"
-          aria-label="Close devices"
+          aria-label="close devices"
           onClick={onClose}
-          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors"
+          className="ather-depth-btn w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0 transition-colors"
         >
           <CloseGlyph className="w-4 h-4" />
         </button>
@@ -115,24 +115,20 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
       <div className="p-4 space-y-5 flex-1 min-h-0 overflow-y-auto no-scrollbar">
         {/* Remote Active Session Banner + Controls when another device holds playback */}
         {isPlayingRemotely && sharedPlayback && (
-          <div className="rounded-2xl bg-[#111114] border border-white/35 p-3.5 space-y-3">
+          <div className="ather-depth-card rounded-2xl p-3.5 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-white truncate">
-                Listening on {sharedPlayback.activeDeviceName}
+              <span className="text-[11px] font-extrabold tracking-wide text-white truncate">
+                listening on {sharedPlayback.activeDeviceName.toLowerCase()}
               </span>
-              <button
-                type="button"
-                onClick={() => void onClaimHere()}
-                className="px-3 py-1.5 rounded-full bg-white text-black text-[11px] font-extrabold hover:bg-white/90 active:scale-95 transition-all shrink-0"
-              >
-                Transfer Here
-              </button>
+              <span className="text-[10px] font-bold text-[#A1A1AA] shrink-0">
+                tap a device below to play
+              </span>
             </div>
 
             {remoteTrack && (
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 shrink-0">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#242429] shrink-0">
                     <ShowcaseArtwork
                       style={remoteTrack.artwork}
                       coverUrl={remoteTrack.coverUrl}
@@ -143,10 +139,10 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-extrabold text-white truncate">
-                      {remoteTrack.title}
+                      {remoteTrack.title.toLowerCase()}
                     </div>
-                    <div className="text-[11px] text-white/75 font-bold truncate">
-                      {remoteTrack.artist}
+                    <div className="text-[11px] text-[#A1A1AA] font-bold truncate">
+                      {remoteTrack.artist.toLowerCase()}
                     </div>
                   </div>
                 </div>
@@ -154,24 +150,24 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    aria-label="Remote previous"
+                    aria-label="remote previous"
                     onClick={() =>
                       void onSendRemoteCommand(sharedPlayback.activeDeviceId, 'prev')
                     }
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+                    className="ather-depth-btn w-9 h-9 rounded-full text-white flex items-center justify-center"
                   >
                     <PrevGlyph className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label={sharedPlayback.isPlaying ? 'Remote pause' : 'Remote play'}
+                    aria-label={sharedPlayback.isPlaying ? 'remote pause' : 'remote play'}
                     onClick={() =>
                       void onSendRemoteCommand(
                         sharedPlayback.activeDeviceId,
                         sharedPlayback.isPlaying ? 'pause' : 'play'
                       )
                     }
-                    className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center"
+                    className="ather-acid-btn w-10 h-10 rounded-full flex items-center justify-center"
                   >
                     {sharedPlayback.isPlaying ? (
                       <PauseGlyph className="w-4 h-4" />
@@ -181,11 +177,11 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
                   </button>
                   <button
                     type="button"
-                    aria-label="Remote next"
+                    aria-label="remote next"
                     onClick={() =>
                       void onSendRemoteCommand(sharedPlayback.activeDeviceId, 'next')
                     }
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+                    className="ather-depth-btn w-9 h-9 rounded-full text-white flex items-center justify-center"
                   >
                     <NextGlyph className="w-3.5 h-3.5" />
                   </button>
@@ -195,176 +191,169 @@ export const DeviceHandoffSheet: React.FC<DeviceHandoffSheetProps> = ({
           </div>
         )}
 
-        {/* Account Synced Devices */}
+        {/* Active Account Devices */}
         {signedInUid ? (
           <div className="space-y-2">
             <div className="px-1 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/75 font-bold">
-                Your Account Devices ({accountDevices.length})
+              <span className="text-[11px] font-bold tracking-wide text-[#A1A1AA]">
+                active devices ({accountDevices.length})
               </span>
-              <span className="text-[10px] font-semibold text-white/60 tabular-nums">
-                {onlineCount} online · Live Sync
+              <span className="text-[10px] font-semibold text-white tabular-nums">
+                {onlineCount} online · live sync
               </span>
             </div>
 
             {accountDevices.length === 0 ? (
-              <div className="rounded-2xl bg-[#111114] border border-white/20 px-4 py-3 text-xs text-white/75 font-bold leading-relaxed">
-                Registering this device with your Google account… Sign in on another phone, tablet, or browser with the same Google account to sync and hand off playback seamlessly.
+              <div className="ather-depth-row rounded-2xl px-4 py-3 text-xs text-[#A1A1AA] font-bold leading-relaxed">
+                registering this device with your google account… sign in on another phone, tablet, or browser with the same google account to play from any active device.
               </div>
             ) : (
-              accountDevices.map((device) => {
-                const isThisDevice = device.id === localDeviceId;
-                const isActiveTarget = activeRemoteDeviceId === device.id;
-                const isOnline = isThisDevice || isDeviceRecentlyOnline(device);
-                const statusLabel = isActiveTarget
-                  ? isPlaying || sharedPlayback?.isPlaying
-                    ? 'Currently Playing'
-                    : 'Active Session'
-                  : `${device.platform || 'Web'} · ${formatDeviceLastSeen(
-                      device.lastSeenAt
-                    )}`;
+              <div className="space-y-2">
+                {accountDevices.map((device) => {
+                  const isThisDevice = device.id === localDeviceId;
+                  const isActiveTarget = activeRemoteDeviceId === device.id;
+                  const isOnline = isThisDevice || isDeviceRecentlyOnline(device);
+                  const statusLabel = isActiveTarget
+                    ? isPlaying || sharedPlayback?.isPlaying
+                      ? 'currently playing'
+                      : 'active device'
+                    : `${(device.platform || 'web').toLowerCase()} · ${formatDeviceLastSeen(
+                        device.lastSeenAt
+                      ).toLowerCase()}`;
 
-                return (
-                  <div
-                    key={device.id}
-                    className={`w-full flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl border transition-all ${
-                      isActiveTarget
-                        ? 'bg-white text-black border-white'
-                        : 'bg-[#111114] text-white border-white/20 hover:border-white/30'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (isThisDevice) {
-                          await onClaimHere();
-                        } else if (currentTrack || sharedPlayback?.track) {
-                          await onTransferToDevice(device);
-                        }
-                        onClose();
-                      }}
-                      className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                  return (
+                    <div
+                      key={device.id}
+                      className={`w-full flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl transition-all ${
+                        isActiveTarget
+                          ? 'ather-acid-btn'
+                          : 'ather-depth-row text-white'
+                      }`}
                     >
-                      <div className="relative shrink-0">
-                        <DevicesGlyph
-                          className="w-5 h-5"
-                          active={isActiveTarget}
-                        />
-                        {isOnline && (
-                          <span
-                            aria-hidden="true"
-                            className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border ${
-                              isActiveTarget
-                                ? 'bg-black border-white'
-                                : 'bg-white border-[#141416]'
-                            }`}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (isThisDevice) {
+                            await onClaimHere();
+                          } else if (currentTrack || sharedPlayback?.track) {
+                            await onTransferToDevice(device);
+                          }
+                          onClose();
+                        }}
+                        className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                      >
+                        <div className="relative shrink-0">
+                          <DevicesGlyph
+                            className="w-5 h-5"
+                            active={isActiveTarget}
                           />
+                          {isOnline && (
+                            <span
+                              aria-hidden="true"
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#242429] ${
+                                isActiveTarget ? 'bg-black' : 'bg-white'
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-extrabold truncate">
+                            {device.name.toLowerCase()} {isThisDevice ? '· this device' : ''}
+                          </div>
+                          <div
+                            className={`text-xs truncate mt-0.5 ${
+                              isActiveTarget ? 'text-black/80 font-bold' : 'text-[#A1A1AA] font-bold'
+                            }`}
+                          >
+                            {statusLabel}
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isActiveTarget ? (
+                          <span className="w-7 h-7 rounded-full bg-black text-white border border-[#242429] flex items-center justify-center shrink-0">
+                            <CheckGlyph className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full bg-[#141418] border border-[#242429] text-[10px] font-bold text-[#A1A1AA] shrink-0">
+                            {isOnline ? 'online' : 'synced'}
+                          </span>
+                        )}
+
+                        {!isThisDevice && onRemoveDevice && (
+                          <button
+                            type="button"
+                            aria-label={`remove ${device.name.toLowerCase()}`}
+                            onClick={() => void onRemoveDevice(device)}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center border transition-colors ${
+                              isActiveTarget
+                                ? 'bg-black/15 text-black border-[#242429]'
+                                : 'bg-[#141418] text-[#A1A1AA] hover:text-white border-[#242429]'
+                            }`}
+                          >
+                            <TrashGlyph className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-extrabold truncate">
-                          {device.name} {isThisDevice ? '· This Device' : ''}
-                        </div>
-                        <div
-                          className={`text-xs truncate mt-0.5 ${
-                            isActiveTarget ? 'text-black/75' : 'text-white/75 font-bold'
-                          }`}
-                        >
-                          {statusLabel}
-                        </div>
-                      </div>
-                    </button>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {isActiveTarget ? (
-                        <span className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center shrink-0">
-                          <CheckGlyph className="w-3.5 h-3.5" />
-                        </span>
-                      ) : currentTrack || sharedPlayback?.track ? (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await onTransferToDevice(device);
-                            onClose();
-                          }}
-                          className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold text-white shrink-0 transition-colors"
-                        >
-                          Transfer
-                        </button>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-white/[0.06] text-[10px] font-semibold text-white/70 shrink-0">
-                          {isOnline ? 'Online' : 'Synced'}
-                        </span>
-                      )}
-
-                      {!isThisDevice && onRemoveDevice && (
-                        <button
-                          type="button"
-                          aria-label={`Remove ${device.name}`}
-                          onClick={() => void onRemoveDevice(device)}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                            isActiveTarget
-                              ? 'bg-black/10 text-black hover:bg-black/20'
-                              : 'bg-white/[0.06] text-white/55 hover:text-white hover:bg-white/15'
-                          }`}
-                        >
-                          <TrashGlyph className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         ) : (
-          <div className="rounded-2xl bg-[#111114] border border-white/20 px-4 py-3 text-xs text-white/75 font-bold">
-            Sign in with Google to view your synced Android, iOS, and desktop devices and transfer playback in real time.
+          <div className="ather-depth-row rounded-2xl px-4 py-3 text-xs text-[#A1A1AA] font-bold">
+            sign in with google to view your active android, ios, and web devices and select where to play.
           </div>
         )}
 
         {/* Local Audio Outputs */}
         <div className="space-y-2">
-          <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-white/75 font-bold">
-            Speaker &amp; Output Routing
+          <div className="px-1 text-[11px] font-bold tracking-wide text-[#A1A1AA]">
+            speaker &amp; output routing
           </div>
-          {browserOutputs.map((device) => {
-            const active = activeBrowserOutputId === device.id;
-            return (
-              <button
-                key={device.id}
-                type="button"
-                onClick={() => {
-                  onSelectBrowserOutput(device.id);
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
-                  active
-                    ? 'bg-white text-[#000000] border-white'
-                    : 'bg-[#111114] text-white border-white/20 hover:border-white/30'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <DevicesGlyph className="w-4 h-4 shrink-0" active={active} />
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold truncate">{device.name}</div>
-                    <div
-                      className={`text-[11px] truncate ${
-                        active ? 'text-[#000000]/70' : 'text-white/75 font-bold'
-                      }`}
-                    >
-                      {device.spec}
+          <div className="space-y-1.5">
+            {browserOutputs.map((device) => {
+              const active = activeBrowserOutputId === device.id;
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectBrowserOutput(device.id);
+                    onClose();
+                  }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-left transition-all ${
+                    active
+                      ? 'ather-acid-btn'
+                      : 'ather-depth-row text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <DevicesGlyph className="w-4 h-4 shrink-0" active={active} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold truncate">
+                        {device.name.toLowerCase()}
+                      </div>
+                      <div
+                        className={`text-[11px] truncate ${
+                          active ? 'text-black/80 font-bold' : 'text-[#A1A1AA] font-bold'
+                        }`}
+                      >
+                        {device.spec.toLowerCase()}
+                      </div>
                     </div>
                   </div>
-                </div>
-                {active && (
-                  <span className="w-6 h-6 rounded-full bg-[#000000] text-white flex items-center justify-center shrink-0">
-                    <CheckGlyph className="w-3 h-3" />
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                  {active && (
+                    <span className="w-6 h-6 rounded-full bg-black text-white border border-[#242429] flex items-center justify-center shrink-0">
+                      <CheckGlyph className="w-3 h-3" />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </PopupSheet>

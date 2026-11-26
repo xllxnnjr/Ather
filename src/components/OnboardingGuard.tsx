@@ -12,7 +12,7 @@ import {
   touchSyncSection,
   writeAccountJson,
 } from '../services/accountStorage';
-import { isValidArtistName, searchRealArtists, searchYouTubeResults } from '../services/musicApi';
+import { isValidArtistName, searchRealArtists, searchRealSongs } from '../services/musicApi';
 import { seedOnboardingTasteProfile } from '../services/tasteProfile';
 import { AVATAR_PRESETS, AvatarPreset, ProfileAvatar } from './ProfileAvatar';
 import { CheckGlyph, ChevronLeftGlyph } from './AppIcons';
@@ -26,18 +26,18 @@ interface OnboardingGuardProps {
 }
 
 const GENRE_CARDS: { id: string; label: string; vibe: string }[] = [
-  { id: 'Hip Hop', label: 'Hip Hop', vibe: '808s & Bars' },
-  { id: 'R&B', label: 'R&B / Soul', vibe: 'Late Night Cuts' },
-  { id: 'Pop', label: 'Pop', vibe: 'Global Charts' },
-  { id: 'Afrobeats', label: 'Afrobeats', vibe: 'Groove & Bounce' },
-  { id: 'Electronic', label: 'Electronic', vibe: 'House & Synth' },
-  { id: 'Alternative', label: 'Alternative', vibe: 'Indie & Alt' },
-  { id: 'Rock', label: 'Rock', vibe: 'Guitars & Live' },
-  { id: 'Latin', label: 'Latin', vibe: 'Reggaetón & Urbana' },
-  { id: 'Blues', label: 'Blues & Jazz', vibe: 'Warm Analog' },
-  { id: 'Party', label: 'Party & Club', vibe: 'High Energy' },
-  { id: 'Sad', label: 'Melancholy', vibe: 'Acoustic & Deep' },
-  { id: 'K-Pop', label: 'K-Pop', vibe: 'Seoul Charts' },
+  { id: 'Hip Hop', label: 'hip hop', vibe: '808s & bars' },
+  { id: 'R&B', label: 'r&b / soul', vibe: 'late night cuts' },
+  { id: 'Pop', label: 'pop', vibe: 'global charts' },
+  { id: 'Afrobeats', label: 'afrobeats', vibe: 'groove & bounce' },
+  { id: 'Electronic', label: 'electronic', vibe: 'house & synth' },
+  { id: 'Alternative', label: 'alternative', vibe: 'indie & alt' },
+  { id: 'Rock', label: 'rock', vibe: 'guitars & live' },
+  { id: 'Latin', label: 'latin', vibe: 'reggaetón & urbana' },
+  { id: 'Blues', label: 'blues & jazz', vibe: 'warm analog' },
+  { id: 'Party', label: 'party & club', vibe: 'high energy' },
+  { id: 'Sad', label: 'melancholy', vibe: 'acoustic & deep' },
+  { id: 'K-Pop', label: 'k-pop', vibe: 'seoul charts' },
 ];
 
 const CURATED_ARTISTS: string[] = [
@@ -142,10 +142,10 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             )
           );
           if (names.length === 0) {
-            const ytFallback = await searchYouTubeResults(q, 6).catch(() => []);
+            const songFallback = await searchRealSongs(q, 8).catch(() => []);
             names = Array.from(
               new Set(
-                ytFallback
+                songFallback
                   .map((item) => item.artist.trim())
                   .filter((name) => isValidArtistName(name))
               )
@@ -223,8 +223,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
     if (finishing) return;
     setFinishing(true);
 
-    const cleanName = displayName.trim() || 'ATHER Listener';
-    const rawHandle = handle.trim() || `@${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+    const cleanName = displayName.trim() || 'Ather listener';
+    const rawHandle =
+      handle.trim() || `@${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
     const cleanHandle = rawHandle.startsWith('@') ? rawHandle : `@${rawHandle}`;
 
     writeAccountJson(
@@ -249,6 +250,27 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
     };
     writeAccountJson('preferences', prefs, account.id);
 
+    const normalizedGenres = selectedGenres.map((g) => g.toLowerCase());
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(
+          'ather_onboarding_v1',
+          JSON.stringify({
+            completed: true,
+            displayName: cleanName,
+            avatarPreset,
+            profileImageUrl,
+            notificationsEnabled: notificationsStatus === 'granted',
+            microphoneEnabled: false,
+            preferredGenres: normalizedGenres,
+            updatedAt: Date.now(),
+          })
+        );
+      } catch {
+        // ignore quota errors
+      }
+    }
+
     seedOnboardingTasteProfile(selectedGenres, selectedArtists);
     setAccountOnboardingCompleted(true, account.id);
     touchSyncSection('profile', account.id);
@@ -263,28 +285,28 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
   const progressPct = Math.round((step / 6) * 100);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col overflow-hidden">
+    <div className="fixed inset-0 h-[100dvh] z-50 bg-black text-white flex flex-col overflow-hidden">
       {/* Top Progress Header */}
       <header className="w-full max-w-lg mx-auto pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 flex items-center gap-3 shrink-0">
         {step > 1 ? (
           <button
             type="button"
-            aria-label="Previous step"
+            aria-label="previous step"
             onClick={() => setStep((s) => Math.max(1, s - 1))}
-            className="w-9 h-9 rounded-full bg-[#111114] border border-white/25 flex items-center justify-center text-white hover:border-white/45 active:scale-95 transition-all shrink-0"
+            className="ather-depth-btn w-11 h-11 rounded-full flex items-center justify-center text-white active:scale-95 transition-all shrink-0"
           >
             <ChevronLeftGlyph className="w-4 h-4" />
           </button>
         ) : (
-          <div className="w-9 h-9 shrink-0" />
+          <div className="w-11 h-11 shrink-0" />
         )}
 
         <div className="flex-1 space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] font-extrabold text-white/75">
-            <span>Step {step} of 6</span>
+          <div className="flex items-center justify-between text-[11px] font-extrabold text-[#A1A1AA]">
+            <span>step {step} of 6</span>
             <span className="text-white font-black tabular-nums">{progressPct}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-[#141416] overflow-hidden">
+          <div className="h-2 w-full rounded-full bg-[#141418] border border-[#242429] overflow-hidden">
             <motion.div
               className="h-full rounded-full bg-white"
               animate={{ width: `${progressPct}%` }}
@@ -293,7 +315,7 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
           </div>
         </div>
 
-        <div className="w-9 h-9 shrink-0" />
+        <div className="w-11 h-11 shrink-0" />
       </header>
 
       {/* Main Step Viewport */}
@@ -305,34 +327,34 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             animate={{ opacity: 1, y: 0 }}
             className="flex-1 flex flex-col justify-center space-y-6"
           >
-            <AtherLogoMark className="w-16 h-16 rounded-2xl border border-white/25 shadow-[0_0_40px_rgba(255,255,255,0.08)]" />
+            <AtherLogoMark className="w-16 h-16 rounded-2xl border border-[#242429]" />
 
             <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-white/65">
-                Welcome to ATHER
+              <p className="text-[11px] font-extrabold tracking-wide text-[#E4E4E7]">
+                welcome to Ather
               </p>
               <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-[1.08] text-white">
-                Music for your soul, tuned to every frequency.
+                music for your soul, tuned to every frequency.
               </h1>
-              <p className="text-sm text-[#9A9AA6] leading-relaxed">
-                Let’s set up your personal profile, pick your favorite sounds, and unlock instant lyrics, Spatial Audio, and Reels for your account.
+              <p className="text-sm text-[#A1A1AA] leading-relaxed">
+                let’s set up your personal profile, pick your favorite sounds, and unlock instant lyrics, full-track audio, and reels for your account.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-2.5 pt-2">
               {[
-                { label: 'Live Charts', desc: 'Daily releases' },
-                { label: 'Synced Lyrics', desc: 'Beat-matched' },
-                { label: 'Cross-Device', desc: 'Instant handoff' },
+                { label: 'live charts', desc: 'daily releases' },
+                { label: 'synced lyrics', desc: 'beat-matched' },
+                { label: 'multi-device', desc: 'active devices sync' },
               ].map((card) => (
                 <div
                   key={card.label}
-                  className="rounded-2xl bg-[#141416] border border-white/12 p-3 space-y-1"
+                  className="ather-depth-card rounded-2xl p-3 space-y-1"
                 >
                   <div className="text-xs font-extrabold text-white">
                     {card.label}
                   </div>
-                  <div className="text-[11px] text-[#9A9AA6]">{card.desc}</div>
+                  <div className="text-[11px] text-[#A1A1AA]">{card.desc}</div>
                 </div>
               ))}
             </div>
@@ -348,26 +370,26 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
           >
             <div>
               <h2 className="text-2xl font-black tracking-tight text-white">
-                Set up your profile
+                set up your profile
               </h2>
-              <p className="text-xs text-[#9A9AA6] mt-1">
-                Customize your avatar, name, and handle for this account.
+              <p className="text-xs text-[#A1A1AA] mt-1">
+                customize your avatar, name, and handle for this account.
               </p>
             </div>
 
-            <div className="rounded-3xl bg-[#141416] border border-white/12 p-4 flex items-center gap-4">
+            <div className="ather-depth-card rounded-3xl p-4 flex items-center gap-4">
               <ProfileAvatar
-                displayName={displayName || 'Listener'}
+                displayName={displayName || 'listener'}
                 imageUrl={profileImageUrl}
                 preset={avatarPreset}
-                className="w-16 h-16 shrink-0 ring-2 ring-white/50"
+                className="w-16 h-16 shrink-0 border border-[#242429] ring-2 ring-white"
               />
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="text-sm font-extrabold text-white truncate">
-                  {displayName.trim() || 'ATHER Listener'}
+                  {displayName.trim() ? displayName.trim().toLowerCase() : 'Ather listener'}
                 </div>
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white cursor-pointer transition-colors">
-                  <span>Upload Photo</span>
+                <label className="ather-depth-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white cursor-pointer">
+                  <span>upload photo</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -379,8 +401,8 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             </div>
 
             <div className="space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-[#9A9AA6]">
-                Or choose an icon avatar
+              <div className="text-[11px] font-bold tracking-wide text-[#A1A1AA]">
+                or choose an icon avatar
               </div>
               <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5">
                 {AVATAR_PRESETS.map((preset) => {
@@ -393,18 +415,22 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                         setProfileImageUrl(null);
                         setAvatarPreset(preset.id);
                       }}
-                      className={`rounded-2xl bg-[#141416] p-1.5 sm:p-2 flex flex-col items-center gap-1 sm:gap-1.5 border transition-all ${
+                      className={`rounded-2xl p-1.5 sm:p-2 flex flex-col items-center gap-1 sm:gap-1.5 transition-all ${
                         selected
-                          ? 'border-white ring-1 ring-white/60'
-                          : 'border-white/10 hover:border-white/25'
+                          ? 'ather-acid-btn'
+                          : 'ather-depth-row text-white'
                       }`}
                     >
                       <ProfileAvatar
-                        displayName={displayName || 'AT'}
+                        displayName={displayName || 'at'}
                         preset={preset.id}
-                        className="w-9 h-9 sm:w-10 sm:h-10"
+                        className="w-9 h-9 sm:w-10 sm:h-10 border border-[#242429]"
                       />
-                      <span className="text-[10px] font-bold text-white/80 truncate max-w-full">
+                      <span
+                        className={`text-[10px] font-extrabold truncate max-w-full ${
+                          selected ? 'text-black' : 'text-[#A1A1AA]'
+                        }`}
+                      >
                         {preset.label}
                       </span>
                     </button>
@@ -415,28 +441,28 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#9A9AA6] mb-1">
-                  Display Name
+                <label className="block text-[11px] font-bold tracking-wide text-[#A1A1AA] mb-1">
+                  display name
                 </label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full rounded-2xl bg-[#141416] border border-white/15 px-4 py-3 text-base sm:text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                  placeholder="your name"
+                  className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-3 text-base sm:text-sm text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#9A9AA6] mb-1">
-                  Handle
+                <label className="block text-[11px] font-bold tracking-wide text-[#A1A1AA] mb-1">
+                  handle
                 </label>
                 <input
                   type="text"
                   value={handle}
                   onChange={(e) => setHandle(e.target.value)}
                   placeholder="@listener"
-                  className="w-full rounded-2xl bg-[#141416] border border-white/15 px-4 py-3 text-base sm:text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                  className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-3 text-base sm:text-sm text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                 />
               </div>
             </div>
@@ -450,15 +476,15 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             animate={{ opacity: 1, y: 0 }}
             className="flex-1 flex flex-col justify-center space-y-5"
           >
-            <div className="rounded-3xl bg-[#141416] border border-white/12 p-6 space-y-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-white/65">
-                Stay in the Loop
+            <div className="ather-depth-card rounded-3xl p-6 space-y-4">
+              <p className="text-[11px] font-extrabold tracking-wide text-[#E4E4E7]">
+                stay in the loop
               </p>
               <h2 className="text-2xl font-black text-white">
-                Turn on New Release alerts
+                turn on new release alerts
               </h2>
-              <p className="text-sm text-[#9A9AA6] leading-relaxed">
-                Get notified when artists you follow drop new albums, singles, and concert sessions.
+              <p className="text-sm text-[#A1A1AA] leading-relaxed">
+                get notified when artists you follow drop new albums, singles, and concert sessions.
               </p>
             </div>
           </motion.div>
@@ -474,10 +500,10 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-white">
-                  Pick your sounds
+                  pick your sounds
                 </h2>
-                <p className="text-xs font-bold text-white/75 mt-1">
-                  Select at least 3 genres to curate your Home categories &amp; Reels mix.
+                <p className="text-xs font-bold text-[#A1A1AA] mt-1">
+                  select at least 3 genres to curate your home categories &amp; next-track autoplay.
                 </p>
               </div>
               <span className="text-xs font-extrabold text-white tabular-nums shrink-0">
@@ -493,10 +519,10 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                     key={genre.id}
                     type="button"
                     onClick={() => toggleGenre(genre.id)}
-                    className={`rounded-2xl p-3.5 text-left border transition-all flex items-center justify-between gap-2 ${
+                    className={`rounded-2xl p-3.5 text-left transition-all flex items-center justify-between gap-2 ${
                       active
-                        ? 'bg-white text-black border-white'
-                        : 'bg-[#111114] text-white border-white/20 hover:border-white/40'
+                        ? 'ather-acid-btn'
+                        : 'ather-depth-row text-white'
                     }`}
                   >
                     <div className="min-w-0">
@@ -505,14 +531,14 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                       </div>
                       <div
                         className={`text-[11px] font-bold truncate ${
-                          active ? 'text-black/80' : 'text-white/70'
+                          active ? 'text-black/75' : 'text-[#A1A1AA]'
                         }`}
                       >
                         {genre.vibe}
                       </div>
                     </div>
                     {active && (
-                      <span className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+                      <span className="w-6 h-6 rounded-full bg-black text-white border border-black flex items-center justify-center shrink-0">
                         <CheckGlyph className="w-3.5 h-3.5" />
                       </span>
                     )}
@@ -532,25 +558,25 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
           >
             <div>
               <h2 className="text-2xl font-black tracking-tight text-white">
-                Follow artists &amp; tune playback
+                follow artists &amp; tune playback
               </h2>
-              <p className="text-xs font-bold text-white/75 mt-1">
-                Artists you pick here appear in Your Top Artists &amp; shape your Home feed.
+              <p className="text-xs font-bold text-[#A1A1AA] mt-1">
+                artists you pick here appear in your top artists &amp; shape your home feed.
               </p>
             </div>
 
             <div className="relative">
-              <SearchNavIcon className="w-4 h-4 text-white/70 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <SearchNavIcon className="w-4 h-4 text-[#A1A1AA] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={artistSearchQuery}
                 onChange={(e) => setArtistSearchQuery(e.target.value)}
-                placeholder="Search any real artist to add..."
-                className="w-full rounded-full bg-[#111114] border border-white/25 pl-10 pr-4 py-2.5 text-base sm:text-sm font-bold text-white placeholder:text-white/55 focus:outline-none focus:border-white"
+                placeholder="search any real artist to add..."
+                className="w-full rounded-full bg-[#141418] border border-[#242429] pl-10 pr-4 py-2.5 text-base sm:text-sm font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
               />
               {artistSearchBusy && (
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white/75">
-                  Searching...
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white">
+                  searching...
                 </span>
               )}
             </div>
@@ -563,36 +589,36 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                     key={artistName}
                     type="button"
                     onClick={() => toggleArtist(artistName)}
-                    className={`px-3.5 py-2 rounded-full text-xs font-extrabold border transition-all inline-flex items-center gap-1.5 ${
+                    className={`px-3.5 py-2 rounded-full text-xs font-extrabold transition-all inline-flex items-center gap-1.5 ${
                       active
-                        ? 'bg-white text-black border-white'
-                        : 'bg-[#111114] text-white border-white/20 hover:border-white/45'
+                        ? 'ather-acid-btn'
+                        : 'ather-depth-pill text-white'
                     }`}
                   >
-                    <span>{artistName}</span>
+                    <span>{artistName.toLowerCase()}</span>
                     {active && <CheckGlyph className="w-3 h-3" />}
                   </button>
                 );
               })}
             </div>
 
-            <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/15">
+            <div className="space-y-2">
               {[
                 {
-                  label: 'Continuous Autoplay',
-                  desc: 'Keep similar tracks queued seamlessly',
+                  label: 'continuous autoplay',
+                  desc: 'keep genre-matched tracks queued seamlessly',
                   value: autoplay,
                   toggle: () => setAutoplay((v) => !v),
                 },
                 {
-                  label: 'Allow Explicit Releases',
-                  desc: 'Play original unedited album & single masters',
+                  label: 'allow explicit releases',
+                  desc: 'play original unedited album & single masters',
                   value: explicitAllowed,
                   toggle: () => setExplicitAllowed((v) => !v),
                 },
                 {
-                  label: 'Time-Synced Lyrics',
-                  desc: 'Show beat-matched lyrics inside the Player',
+                  label: 'time-synced lyrics',
+                  desc: 'show beat-matched lyrics inside the player',
                   value: showLyricsEnabled,
                   toggle: () => setShowLyricsEnabled((v) => !v),
                 },
@@ -601,24 +627,24 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                   key={pref.label}
                   type="button"
                   onClick={pref.toggle}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left"
+                  className="ather-depth-row w-full rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3 text-left"
                 >
                   <div className="min-w-0">
                     <div className="text-sm font-extrabold text-white">
                       {pref.label}
                     </div>
-                    <div className="text-[11px] font-bold text-white/70">{pref.desc}</div>
+                    <div className="text-[11px] font-bold text-[#A1A1AA]">{pref.desc}</div>
                   </div>
                   <span
-                    className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${
-                      pref.value ? 'bg-white' : 'bg-white/25'
+                    className={`w-11 h-6 rounded-full p-0.5 border border-[#242429] transition-colors shrink-0 ${
+                      pref.value ? 'bg-white' : 'bg-[#141418]'
                     }`}
                   >
                     <span
-                      className={`block w-5 h-5 rounded-full transition-transform ${
+                      className={`block w-4 h-4 rounded-full transition-transform ${
                         pref.value
                           ? 'translate-x-5 bg-black'
-                          : 'translate-x-0 bg-white'
+                          : 'translate-x-0 bg-[#A1A1AA]'
                       }`}
                     />
                   </span>
@@ -635,27 +661,27 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             animate={{ opacity: 1, y: 0 }}
             className="flex-1 flex flex-col justify-center space-y-5"
           >
-            <div className="rounded-3xl bg-[#111114] border border-white/30 p-6 space-y-4">
+            <div className="ather-depth-card rounded-3xl p-6 space-y-4">
               <div className="flex items-center gap-3.5">
                 <ProfileAvatar
-                  displayName={displayName || 'Listener'}
+                  displayName={displayName || 'listener'}
                   imageUrl={profileImageUrl}
                   preset={avatarPreset}
-                  className="w-14 h-14 ring-2 ring-white"
+                  className="w-14 h-14 border border-[#242429] ring-2 ring-white"
                 />
                 <div className="min-w-0">
                   <div className="text-lg font-black text-white truncate">
-                    {displayName.trim() || 'ATHER Listener'}
+                    {displayName.trim() ? displayName.trim().toLowerCase() : 'Ather listener'}
                   </div>
-                  <div className="text-xs font-bold text-white/75 truncate">
-                    {handle.trim() || '@listener'} · {selectedGenres.length} genres ·{' '}
+                  <div className="text-xs font-bold text-[#A1A1AA] truncate">
+                    {(handle.trim() || '@listener').toLowerCase()} · {selectedGenres.length} genres ·{' '}
                     {selectedArtists.length} artists
                   </div>
                 </div>
               </div>
 
-              <p className="text-sm font-bold text-white/90 leading-relaxed">
-                Everything is tuned for this account. Tap below to launch your personalized ATHER listening space.
+              <p className="text-sm font-bold text-[#E4E4E7] leading-relaxed">
+                everything is tuned for this account. tap below to launch your personalized Ather listening space.
               </p>
             </div>
           </motion.div>
@@ -667,9 +693,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all"
+              className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all"
             >
-              Get Started
+              get started
             </button>
           )}
 
@@ -678,9 +704,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
               type="button"
               disabled={!displayName.trim()}
               onClick={() => setStep(3)}
-              className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all disabled:opacity-40"
+              className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all disabled:opacity-40"
             >
-              Continue
+              continue
             </button>
           )}
 
@@ -689,9 +715,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
               <button
                 type="button"
                 onClick={() => void requestNotifications()}
-                className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all"
+                className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all"
               >
-                Allow Notifications
+                allow notifications
               </button>
               <button
                 type="button"
@@ -699,9 +725,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
                   setNotificationsStatus('skipped');
                   setStep(4);
                 }}
-                className="w-full h-11 rounded-full bg-[#111114] border border-white/20 text-white/80 font-extrabold text-xs hover:text-white transition-colors"
+                className="ather-depth-pill w-full h-11 rounded-full text-white font-extrabold text-xs transition-colors"
               >
-                Maybe Later
+                maybe later
               </button>
             </div>
           )}
@@ -711,11 +737,11 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
               type="button"
               disabled={selectedGenres.length < 3}
               onClick={() => setStep(5)}
-              className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all disabled:opacity-40"
+              className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all disabled:opacity-40"
             >
               {selectedGenres.length >= 3
-                ? 'Continue'
-                : `Pick ${3 - selectedGenres.length} more`}
+                ? 'continue'
+                : `pick ${3 - selectedGenres.length} more`}
             </button>
           )}
 
@@ -724,11 +750,11 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
               type="button"
               disabled={selectedArtists.length < 1}
               onClick={() => setStep(6)}
-              className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all disabled:opacity-40"
+              className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all disabled:opacity-40"
             >
               {selectedArtists.length >= 1
-                ? 'Review Setup'
-                : 'Select at least 1 artist'}
+                ? 'review setup'
+                : 'select at least 1 artist'}
             </button>
           )}
 
@@ -737,9 +763,9 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
               type="button"
               disabled={finishing}
               onClick={() => void finalizeOnboarding()}
-              className="w-full h-12 rounded-full bg-white text-black font-black text-sm hover:bg-white/90 active:scale-[0.985] transition-all"
+              className="ather-acid-btn w-full h-12 rounded-full font-black text-sm active:scale-[0.985] transition-all"
             >
-              {finishing ? 'Launching...' : 'Start Listening'}
+              {finishing ? 'launching...' : 'start listening'}
             </button>
           )}
         </div>

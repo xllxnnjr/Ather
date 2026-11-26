@@ -1,4 +1,10 @@
 import { ShowcaseTrack } from '../types/music';
+import {
+  registerBackgroundMediaActions,
+  syncBackgroundPlaybackState,
+  syncBackgroundPosition,
+  syncBackgroundTrackMetadata,
+} from './backgroundAudioController';
 
 export interface MediaSessionCallbacks {
   onPlay: () => void;
@@ -14,116 +20,34 @@ const SILENT_KEEPALIVE_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
 class AtherMediaSessionService {
-  private callbacks: MediaSessionCallbacks | null = null;
   private lastTrackId: string | null = null;
   private silentKeepAliveAudio: HTMLAudioElement | null = null;
   private wakeLock: { release?: () => Promise<void> } | null = null;
-  private lastPositionSyncAt = 0;
 
   init(callbacks: MediaSessionCallbacks) {
-    this.callbacks = callbacks;
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-
-    const ms = navigator.mediaSession;
-    const safeSetHandler = (
-      action: MediaSessionAction,
-      handler: MediaSessionActionHandler | null
-    ) => {
-      try {
-        ms.setActionHandler(action, handler);
-      } catch {
-        // Ignore unsupported actions in older WebViews
-      }
-    };
-
-    safeSetHandler('play', () => this.callbacks?.onPlay());
-    safeSetHandler('pause', () => this.callbacks?.onPause());
-    safeSetHandler('previoustrack', () => this.callbacks?.onPrevious());
-    safeSetHandler('nexttrack', () => this.callbacks?.onNext());
-    safeSetHandler('stop', () => this.callbacks?.onPause());
-    safeSetHandler('seekto', (details) => {
-      if (typeof details.seekTime === 'number' && Number.isFinite(details.seekTime)) {
-        this.callbacks?.onSeekTo(Math.max(0, details.seekTime));
-      }
-    });
-    safeSetHandler('seekbackward', (details) => {
-      const offset = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
-      this.callbacks?.onSeekOffset(-Math.abs(offset));
-    });
-    safeSetHandler('seekforward', (details) => {
-      const offset = typeof details.seekOffset === 'number' ? details.seekOffset : 10;
-      this.callbacks?.onSeekOffset(Math.abs(offset));
-    });
-  }
-
-  private buildArtworkList(coverUrl?: string): MediaImage[] {
-    if (!coverUrl || !coverUrl.startsWith('http')) {
-      return [
-        { src: '/assets/aistudio/image_6ac665d7.png', sizes: '512x512', type: 'image/png' },
-      ];
-    }
-
-    const sizes: Array<{ dim: number; label: string }> = [
-      { dim: 96, label: '96x96' },
-      { dim: 192, label: '192x192' },
-      { dim: 300, label: '300x300' },
-      { dim: 512, label: '512x512' },
-    ];
-
-    const isItunesUrl = /(?:\/\d+x\d+bb(-\d+)?\.|\d+x\d+bb)/.test(coverUrl);
-    if (!isItunesUrl) {
-      return sizes.map(({ label }) => ({ src: coverUrl, sizes: label }));
-    }
-
-    return sizes.map(({ dim, label }) => ({
-      src: coverUrl.replace(
-        /(?:\/\d+x\d+bb(-\d+)?\.|\d+x\d+bb)/g,
-        (match) => (match.startsWith('/') ? `/${dim}x${dim}bb.` : `${dim}x${dim}bb`)
-      ),
-      sizes: label,
-      type: 'image/jpeg',
-    }));
+    registerBackgroundMediaActions(callbacks);
   }
 
   updateMetadata(track: ShowcaseTrack | null) {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
     if (!track) {
       this.lastTrackId = null;
-      try {
-        navigator.mediaSession.metadata = null;
-      } catch {
-        // ignore
-      }
+      syncBackgroundTrackMetadata(null);
       return;
     }
 
-    if (this.lastTrackId === track.id && navigator.mediaSession.metadata) {
+    if (
+      this.lastTrackId === track.id &&
+      typeof navigator !== 'undefined' &&
+      navigator.mediaSession?.metadata
+    ) {
       return;
     }
     this.lastTrackId = track.id;
-
-    try {
-      if (typeof MediaMetadata !== 'undefined') {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: track.title || 'Unknown Track',
-          artist: track.artist || 'ATHER',
-          album: track.album || 'ATHER',
-          artwork: this.buildArtworkList(track.coverUrl),
-        });
-      }
-    } catch {
-      // ignore MediaMetadata errors in unsupported browsers
-    }
+    syncBackgroundTrackMetadata(track);
   }
 
   updatePlaybackState(isPlaying: boolean) {
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-      try {
-        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-      } catch {
-        // ignore
-      }
-    }
+    syncBackgroundPlaybackState(isPlaying);
 
     if (isPlaying) {
       this.startKeepAlive();
@@ -134,32 +58,8 @@ class AtherMediaSessionService {
     }
   }
 
-  updatePositionState(positionSec: number, durationSec: number) {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-    if (typeof navigator.mediaSession.setPositionState !== 'function') return;
-
-    const now = Date.now();
-    if (now - this.lastPositionSyncAt < 800) return;
-    this.lastPositionSyncAt = now;
-
-    const safeDuration =
-      Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
-    if (safeDuration <= 0) return;
-
-    const safePos = Math.max(
-      0,
-      Math.min(safeDuration, Number.isFinite(positionSec) ? positionSec : 0)
-    );
-
-    try {
-      navigator.mediaSession.setPositionState({
-        duration: safeDuration,
-        playbackRate: 1.0,
-        position: safePos,
-      });
-    } catch {
-      // ignore range errors
-    }
+  updatePositionState(positionSec: number, durationSec: number, force = false) {
+    syncBackgroundPosition(positionSec, durationSec, force);
   }
 
   private startKeepAlive() {
@@ -169,6 +69,7 @@ class AtherMediaSessionService {
         const audio = new Audio(SILENT_KEEPALIVE_WAV);
         audio.loop = true;
         audio.volume = 0.001;
+        audio.setAttribute('playsinline', 'true');
         this.silentKeepAliveAudio = audio;
       }
       if (this.silentKeepAliveAudio.paused) {

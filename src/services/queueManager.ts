@@ -164,7 +164,7 @@ class AtherQueueManager {
     if (this.tasteContext.likedTrackIds.includes(candidate.id)) {
       score += 6;
     }
-    if (candidate.youtubeVideoId) score += 4;
+    if (candidate.streamUrl) score += 4;
     if (this.historyIds.slice(0, 12).includes(candidate.id)) {
       score -= 20;
     }

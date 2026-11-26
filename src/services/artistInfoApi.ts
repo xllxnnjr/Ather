@@ -57,8 +57,6 @@ const mbRecordingCache = new Map<string, RecordingMetadataInfo | null>();
 function normalizeArtistMatchText(raw: string): string {
   return raw
     .toLowerCase()
-    .replace(/\s*-\s*topic$/i, '')
-    .replace(/vevo$/i, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -318,21 +316,6 @@ async function fetchMusicBrainzArtistRaw(
   };
 
   try {
-    const proxyRes = await fetch(
-      `/api/musicbrainz/artist?name=${encodeURIComponent(artistName.trim())}`
-    );
-    const ct = proxyRes.headers.get('content-type') || '';
-    if (proxyRes.ok && ct.includes('application/json')) {
-      const data = (await proxyRes.json()) as MusicBrainzArtistSearchResponse;
-      const match = parseArtistPayload(data);
-      mbArtistCache.set(key, match);
-      return match;
-    }
-  } catch {
-    // Fall through to direct MusicBrainz HTTPS call (APK / static runtime)
-  }
-
-  try {
     const directRes = await fetch(
       `https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(
         `artist:"${artistName.trim()}"`
@@ -368,11 +351,11 @@ export async function fetchArtistProfileInfo(
     name: deezer?.name || mb?.name || artistName,
     photoUrl,
     deezerFans: deezer?.deezerFans,
-    type: mb?.type || undefined,
+    type: mb?.type ? mb.type.toLowerCase() : undefined,
     country: mb?.country || undefined,
     beginYear: mb?.['life-span']?.begin?.slice(0, 4) || undefined,
     endYear: mb?.['life-span']?.ended
-      ? mb?.['life-span']?.end?.slice(0, 4) || 'Ended'
+      ? mb?.['life-span']?.end?.slice(0, 4) || 'ended'
       : undefined,
     disambiguation: mb?.disambiguation || undefined,
   };
@@ -389,20 +372,6 @@ export async function fetchMusicBrainzRecordingInfo(
 
   const fetchRecordingJson =
     async (): Promise<MusicBrainzRecordingSearchResponse | null> => {
-      try {
-        const proxyRes = await fetch(
-          `/api/musicbrainz/recording?title=${encodeURIComponent(
-            title.trim()
-          )}&artist=${encodeURIComponent(artist.trim())}`
-        );
-        const ct = proxyRes.headers.get('content-type') || '';
-        if (proxyRes.ok && ct.includes('application/json')) {
-          return (await proxyRes.json()) as MusicBrainzRecordingSearchResponse;
-        }
-      } catch {
-        // Fallback to direct HTTPS endpoint
-      }
-
       try {
         const query = `recording:"${title.trim()}" AND artist:"${artist.trim()}"`;
         const directRes = await fetch(
@@ -435,9 +404,9 @@ export async function fetchMusicBrainzRecordingInfo(
   const firstRelease = recording?.releases?.[0];
   const begin = mbArtist?.['life-span']?.begin?.slice(0, 4);
   const end = mbArtist?.['life-span']?.ended
-    ? mbArtist?.['life-span']?.end?.slice(0, 4) || 'Ended'
+    ? mbArtist?.['life-span']?.end?.slice(0, 4) || 'ended'
     : begin
-    ? 'Present'
+    ? 'present'
     : undefined;
 
   const info: RecordingMetadataInfo = {
@@ -447,9 +416,9 @@ export async function fetchMusicBrainzRecordingInfo(
     releaseTitle: firstRelease?.title || undefined,
     releaseDate:
       firstRelease?.date || recording?.['first-release-date'] || undefined,
-    artistType: mbArtist?.type || undefined,
+    artistType: mbArtist?.type ? mbArtist.type.toLowerCase() : undefined,
     country: mbArtist?.country || undefined,
-    activeYears: begin ? `${begin} – ${end ?? 'Present'}` : undefined,
+    activeYears: begin ? `${begin} – ${end ?? 'present'}` : undefined,
     disambiguation: mbArtist?.disambiguation || undefined,
   };
 

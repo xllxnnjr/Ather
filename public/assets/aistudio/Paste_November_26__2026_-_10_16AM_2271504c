@@ -1,0 +1,894 @@
+Because you build both Android/Kotlin apps and Web/PWA apps, here is a complete Kotlin + Jetpack Compose + Media3 package covering:
+
+Streaming & Playback Engine (pluggable StreamSource + Media3 ExoPlayer + MediaSessionService for background/lock-screen/Android Auto style playback)
+
+Audio Lab / FX & Crossmix Engine (crossfade planner, EQ/bass/loudness/spatial toggles)
+
+Design & Animations (matte dark theme, spinning vinyl disc animation, animated equalizers/progress, queue & lyrics sheets)
+
+Copy-Paste Prompt to generate or adapt the entire package in one go.
+
+1. Complete Copy-Paste Prompt
+Prompt:
+"Build a complete, modular Android music streaming app in Kotlin + Jetpack Compose + AndroidX Media3 matching Mochy Music's architecture and features.
+
+Include:
+
+Streaming & Playback Service (PlaybackService.kt + StreamRepository.kt):
+
+A MediaSessionService backed by ExoPlayer with background audio, lock-screen controls, and notification updates.
+
+A StreamProvider interface supporting both direct stream URLs (resolved via a pluggable token/stream resolver with caching) and fallback stream resolution, plus clean error handling for unavailable/unplayable streams.
+
+Queue management (play next, add to queue, shuffle, repeat modes) and smooth crossfade/transition scheduling (CrossmixPlanner).
+
+Audio FX & DSP State (AudioFxManager.kt):
+
+Manageable presets and real-time toggles for Equalizer bands, Loudness/ReplayGain normalization, Crossfade duration, and Spatial/Stage audio mode.
+
+UI, Design & Animations (Theme.kt, MiniPlayer.kt, NowPlayingScreen.kt, LyricsAndQueueSheet.kt):
+
+Sleek matte dark-mode UI (#09090B / #131518 surfaces, crisp typography, custom rounded/sculpted cards).
+
+Smooth animations: continuous vinyl/artwork rotation while playing (pausing smoothly when paused), scale/spring transitions on play/pause, animated equalizer bars, and collapsible mini-player to full Now Playing view.
+
+Synced/scrollable lyrics tab, queue view, and library/playlist/backup hooks.
+
+Provide complete, well-structured Kotlin files with clear comments and no placeholders omitted."
+
+2. Complete Starter Package Code
+File 1: app/build.gradle.kts (Core Dependencies)
+Kotlin
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+android {
+    namespace = "com.example.mochyclone"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.example.mochyclone"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0.0"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+}
+
+dependencies {
+    val media3Version = "1.5.1"
+
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Media3 ExoPlayer & Background MediaSession
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+
+    // Coroutines for async stream resolution & state
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+}
+File 2: PlayerModels.kt (Tracks, Stream Resolver, Crossmix & Audio FX Models)
+Kotlin
+package com.example.mochyclone
+
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+
+data class SongTrack(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String = "Single",
+    val durationMs: Long = 180_000L,
+    val artworkUrl: String = "",
+    val streamUrl: String? = null,
+    val lyrics: List<LyricLine> = emptyList()
+)
+
+data class LyricLine(
+    val timeMs: Long,
+    val text: String,
+    val translatedText: String? = null
+)
+
+sealed interface StreamResolution {
+    data class ReadyUrl(val url: String, val headers: Map<String, String> = emptyMap()) : StreamResolution
+    data class Failure(val reason: String) : StreamResolution
+}
+
+fun interface StreamProvider {
+    suspend fun resolve(track: SongTrack): StreamResolution
+}
+
+data class AudioFxState(
+    val eqPreset: String = "Flat",
+    val bassBoostDb: Float = 0f,
+    val trebleDb: Float = 0f,
+    val crossfadeSec: Int = 4,
+    val loudnessNormalization: Boolean = true,
+    val spatialAudio: Boolean = false
+)
+
+class CrossmixPlanner {
+    fun computeCrossfadeDurationMs(
+        currentTrack: SongTrack?,
+        nextTrack: SongTrack?,
+        configuredSec: Int
+    ): Long {
+        if (currentTrack == null || nextTrack == null || configuredSec <= 0) return 0L
+        val maxAllowedMs = (currentTrack.durationMs / 4).coerceAtMost(12_000L)
+        return (configuredSec * 1000L).coerceAtMost(maxAllowedMs)
+    }
+}
+
+class AudioFxController {
+    private val _state = MutableStateFlow(AudioFxState())
+    val state: StateFlow<AudioFxState> = _state.asStateFlow()
+
+    fun setPreset(preset: String) = _state.update { it.copy(eqPreset = preset) }
+    fun setBass(db: Float) = _state.update { it.copy(bassBoostDb = db) }
+    fun setTreble(db: Float) = _state.update { it.copy(trebleDb = db) }
+    fun setCrossfadeSec(sec: Int) = _state.update { it.copy(crossfadeSec = sec.coerceIn(0, 12)) }
+    fun toggleLoudness() = _state.update { it.copy(loudnessNormalization = !it.loudnessNormalization) }
+    fun toggleSpatial() = _state.update { it.copy(spatialAudio = !it.spatialAudio) }
+}
+File 3: MusicPlayerEngine.kt (Queue, Stream Resolution, Media3 ExoPlayer & State)
+Kotlin
+package com.example.mochyclone
+
+import android.content.Context
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+data class PlayerUiState(
+    val queue: List<SongTrack> = emptyList(),
+    val currentIndex: Int = -1,
+    val isPlaying: Boolean = false,
+    val isResolvingStream: Boolean = false,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 1L,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val errorMessage: String? = null
+) {
+    val currentTrack: SongTrack?
+        get() = queue.getOrNull(currentIndex)
+}
+
+class MusicPlayerEngine(
+    context: Context,
+    private val streamProvider: StreamProvider,
+    private val crossmixPlanner: CrossmixPlanner = CrossmixPlanner(),
+    private val audioFxController: AudioFxController = AudioFxController()
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val streamCache = mutableMapOf<String, String>()
+    private var progressJob: Job? = null
+
+    val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+        addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                _uiState.update { it.copy(isPlaying = isPlaying) }
+                if (isPlaying) startProgressTicker() else stopProgressTicker()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    _uiState.update {
+                        it.copy(durationMs = duration.coerceAtLeast(1L))
+                    }
+                } else if (playbackState == Player.STATE_ENDED) {
+                    playNext()
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                _uiState.update {
+                    it.copy(
+                        isPlaying = false,
+                        errorMessage = "Stream error: ${error.errorCodeName}"
+                    )
+                }
+            }
+        })
+    }
+
+    private val _uiState = MutableStateFlow(PlayerUiState())
+    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+    val fxState: StateFlow<AudioFxState> = audioFxController.state
+
+    fun setQueueAndPlay(tracks: List<SongTrack>, startIndex: Int = 0) {
+        if (tracks.isEmpty()) return
+        val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
+        _uiState.update {
+            it.copy(
+                queue = tracks,
+                currentIndex = safeIndex,
+                errorMessage = null
+            )
+        }
+        loadAndPlayTrack(tracks[safeIndex])
+    }
+
+    fun enqueueNext(track: SongTrack) {
+        _uiState.update { state ->
+            if (state.queue.isEmpty()) {
+                return@update state.copy(queue = listOf(track), currentIndex = 0)
+            }
+            val insertAt = (state.currentIndex + 1).coerceAtMost(state.queue.size)
+            val updated = state.queue.toMutableList().apply { add(insertAt, track) }
+            state.copy(queue = updated)
+        }
+    }
+
+    fun togglePlayPause() {
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            if (player.currentMediaItem == null) {
+                _uiState.value.currentTrack?.let { loadAndPlayTrack(it) }
+            } else {
+                player.play()
+            }
+        }
+    }
+
+    fun playNext() {
+        val state = _uiState.value
+        if (state.queue.isEmpty()) return
+        val nextIdx = if (state.shuffleEnabled) {
+            state.queue.indices.random()
+        } else {
+            (state.currentIndex + 1) % state.queue.size
+        }
+        _uiState.update { it.copy(currentIndex = nextIdx, errorMessage = null) }
+        loadAndPlayTrack(state.queue[nextIdx])
+    }
+
+    fun playPrevious() {
+        val state = _uiState.value
+        if (state.queue.isEmpty()) return
+        if (player.currentPosition > 3_000L) {
+            seekTo(0L)
+            return
+        }
+        val prevIdx = if (state.currentIndex - 1 < 0) state.queue.lastIndex else state.currentIndex - 1
+        _uiState.update { it.copy(currentIndex = prevIdx, errorMessage = null) }
+        loadAndPlayTrack(state.queue[prevIdx])
+    }
+
+    fun seekTo(positionMs: Long) {
+        player.seekTo(positionMs.coerceAtLeast(0L))
+        _uiState.update { it.copy(positionMs = positionMs) }
+    }
+
+    fun toggleShuffle() {
+        _uiState.update { it.copy(shuffleEnabled = !it.shuffleEnabled) }
+    }
+
+    fun cycleRepeatMode() {
+        val nextMode = when (_uiState.value.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        player.repeatMode = nextMode
+        _uiState.update { it.copy(repeatMode = nextMode) }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    private fun loadAndPlayTrack(track: SongTrack) {
+        scope.launch {
+            _uiState.update { it.copy(isResolvingStream = true, positionMs = 0L, errorMessage = null) }
+
+            val resolvedUrl = streamCache[track.id] ?: track.streamUrl ?: run {
+                when (val res = streamProvider.resolve(track)) {
+                    is StreamResolution.ReadyUrl -> {
+                        streamCache[track.id] = res.url
+                        res.url
+                    }
+                    is StreamResolution.Failure -> {
+                        _uiState.update {
+                            it.copy(isResolvingStream = false, isPlaying = false, errorMessage = res.reason)
+                        }
+                        return@launch
+                    }
+                }
+            }
+
+            val nextTrack = _uiState.value.queue.getOrNull(_uiState.value.currentIndex + 1)
+            val crossfadeMs = crossmixPlanner.computeCrossfadeDurationMs(
+                currentTrack = track,
+                nextTrack = nextTrack,
+                configuredSec = fxState.value.crossfadeSec
+            )
+
+            val mediaItem = MediaItem.Builder()
+                .setMediaId(track.id)
+                .setUri(Uri.parse(resolvedUrl))
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(track.title)
+                        .setArtist(track.artist)
+                        .setAlbumTitle(track.album)
+                        .setArtworkUri(track.artworkUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
+                        .build()
+                )
+                .build()
+
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.play()
+
+            _uiState.update {
+                it.copy(
+                    isResolvingStream = false,
+                    durationMs = track.durationMs.coerceAtLeast(1L)
+                )
+            }
+            // Hook `crossfadeMs` into a fade-out coroutine near `durationMs - crossfadeMs` if desired
+            if (crossfadeMs > 0L) {
+                scheduleCrossfadeCue(crossfadeMs)
+            }
+        }
+    }
+
+    private fun scheduleCrossfadeCue(crossfadeMs: Long) {
+        // Placeholder hook for volume ramp/transition before track end
+        scope.launch {
+            val waitMs = (player.duration.coerceAtLeast(0L) - crossfadeMs - player.currentPosition).coerceAtLeast(0L)
+            if (waitMs > 0L) delay(waitMs)
+        }
+    }
+
+    private fun startProgressTicker() {
+        progressJob?.cancel()
+        progressJob = scope.launch {
+            while (isActive) {
+                _uiState.update {
+                    it.copy(
+                        positionMs = player.currentPosition.coerceAtLeast(0L),
+                        durationMs = player.duration.takeIf { d -> d > 0 } ?: it.durationMs
+                    )
+                }
+                delay(250L)
+            }
+        }
+    }
+
+    private fun stopProgressTicker() {
+        progressJob?.cancel()
+        progressJob = null
+    }
+
+    fun release() {
+        stopProgressTicker()
+        player.release()
+    }
+}
+File 4: PlaybackService.kt (Background Media3 Session Service)
+Kotlin
+package com.example.mochyclone
+
+import android.content.Intent
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
+
+class PlaybackService : MediaSessionService() {
+    private var mediaSession: MediaSession? = null
+    private lateinit var exoPlayer: ExoPlayer
+
+    override fun onCreate() {
+        super.onCreate()
+        exoPlayer = ExoPlayer.Builder(this).build()
+        mediaSession = MediaSession.Builder(this, exoPlayer).build()
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        mediaSession
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = mediaSession?.player
+        if (player == null || !player.playWhenReady || player.mediaItemCount == 0 || player.playbackState == Player.STATE_ENDED) {
+            stopSelf()
+        }
+    }
+
+    override fun onDestroy() {
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
+        super.onDestroy()
+    }
+}
+File 5: MochyPlayerUi.kt (Matte Dark Theme, Spinning Disc Animation, Equalizer Bars, Lyrics & FX)
+Kotlin
+package com.example.mochyclone
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+
+object MochyPalette {
+    val Background = Color(0xFF090A0C)
+    val SurfaceCard = Color(0xFF13161A)
+    val SurfaceElevated = Color(0xFF1C2026)
+    val Accent = Color(0xFFE5E7EB)
+    val MutedText = Color(0xFF9CA3AF)
+}
+
+@Composable
+fun MochyTheme(content: @Composable () -> Unit) {
+    val darkScheme = darkColorScheme(
+        primary = MochyPalette.Accent,
+        background = MochyPalette.Background,
+        surface = MochyPalette.SurfaceCard,
+        onPrimary = MochyPalette.Background,
+        onBackground = Color.White,
+        onSurface = Color.White
+    )
+    MaterialTheme(colorScheme = darkScheme, content = content)
+}
+
+@Composable
+fun AnimatedEqualizerBars(isPlaying: Boolean, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "eq_bars")
+    val barHeights = List(3) { index ->
+        transition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = 360 + index * 110,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "eq_bar_$index"
+        )
+    }
+
+    Row(
+        modifier = modifier.height(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        barHeights.forEach { anim ->
+            val factor = if (isPlaying) anim.value else 0.25f
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight(factor.coerceIn(0.2f, 1f))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White)
+            )
+        }
+    }
+}
+
+@Composable
+fun MiniPlayerBar(
+    uiState: PlayerUiState,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onOpenFullPlayer: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val track = uiState.currentTrack ?: return
+    val progress = (uiState.positionMs.toFloat() / uiState.durationMs.toFloat()).coerceIn(0f, 1f)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MochyPalette.SurfaceElevated)
+            .clickable(onClick = onOpenFullPlayer)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MochyPalette.SurfaceCard),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = track.title.take(1).uppercase(),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = track.artist,
+                    color = MochyPalette.MutedText,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            AnimatedEqualizerBars(
+                isPlaying = uiState.isPlaying,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            IconButton(onClick = onTogglePlay) {
+                Icon(
+                    imageVector = if (uiState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                    tint = Color.White
+                )
+            }
+
+            IconButton(onClick = onNext) {
+                Icon(
+                    imageVector = Icons.Rounded.SkipNext,
+                    contentDescription = "Next",
+                    tint = Color.White
+                )
+            }
+        }
+
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp),
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.12f)
+        )
+    }
+}
+
+@Composable
+fun FullNowPlayingScreen(
+    uiState: PlayerUiState,
+    fxState: AudioFxState,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onToggleSpatial: () -> Unit,
+    onToggleLoudness: () -> Unit,
+    onClose: () -> Unit
+) {
+    val track = uiState.currentTrack ?: return
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Controls, 1 = Lyrics, 2 = Audio FX
+
+    val spinTransition = rememberInfiniteTransition(label = "disc_rotation")
+    val discAngle by spinTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "disc_angle"
+    )
+
+    val discScale by animateFloatAsState(
+        targetValue = if (uiState.isPlaying) 1f else 0.92f,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "disc_scale"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MochyPalette.Background)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White)
+            }
+            Text(
+                text = track.album.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MochyPalette.MutedText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            AnimatedEqualizerBars(isPlaying = uiState.isPlaying)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Segmented Tabs: Player / Lyrics / Audio FX
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(MochyPalette.SurfaceCard)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("Player", "Lyrics", "Audio FX").forEachIndexed { idx, label ->
+                val active = selectedTab == idx
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (active) MochyPalette.SurfaceElevated else Color.Transparent)
+                        .clickable { selectedTab = idx }
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (active) Color.White else MochyPalette.MutedText
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        when (selectedTab) {
+            0 -> {
+                Box(
+                    modifier = Modifier
+                        .size(250.dp)
+                        .scale(discScale)
+                        .rotate(if (uiState.isPlaying) discAngle else 0f)
+                        .clip(CircleShape)
+                        .background(MochyPalette.SurfaceElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = track.title.take(2).uppercase(),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+
+            1 -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MochyPalette.SurfaceCard)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (track.lyrics.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No synced lyrics available for this track.",
+                                color = MochyPalette.MutedText
+                            )
+                        }
+                    } else {
+                        items(track.lyrics) { line ->
+                            val isActiveLine = uiState.positionMs >= line.timeMs
+                            Column {
+                                Text(
+                                    text = line.text,
+                                    color = if (isActiveLine) Color.White else MochyPalette.MutedText,
+                                    fontWeight = if (isActiveLine) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                                line.translatedText?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MochyPalette.MutedText
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MochyPalette.SurfaceCard)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Audio Lab & Stage", fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        FilterChip(
+                            selected = fxState.spatialAudio,
+                            onClick = onToggleSpatial,
+                            label = { Text("Spatial / HRTF") }
+                        )
+                        FilterChip(
+                            selected = fxState.loudnessNormalization,
+                            onClick = onToggleLoudness,
+                            label = { Text("Loudness Norm") }
+                        )
+                    }
+                    Text(
+                        text = "Crossfade: ${fxState.crossfadeSec}s  •  EQ Preset: ${fxState.eqPreset}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MochyPalette.MutedText
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = uiState.errorMessage != null) {
+            Text(
+                text = uiState.errorMessage.orEmpty(),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f, fill = selectedTab == 0))
+
+        // Track Title & Artist
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MochyPalette.MutedText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Scrubber
+        val sliderPos = (uiState.positionMs.toFloat() / uiState.durationMs.toFloat()).coerceIn(0f, 1f)
+        Slider(
+            value = sliderPos,
+            onValueChange = { fraction ->
+                onSeek((fraction * uiState.durationMs).toLong())
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Transport Controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onToggleShuffle) {
+                Icon(
+                    Icons.Rounded.Shuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (uiState.shuffleEnabled) Color.White else MochyPalette.MutedText
+                )
+            }
+            IconButton(onClick = onPrevious, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+            }
+            FilledIconButton(
+                onClick = onTogglePlay,
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = if (uiState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White)
+            }
+            IconButton(onClick = onCycleRepeat) {
+                Icon(
+                    imageVector = if (uiState.repeatMode == Player.REPEAT_MODE_ONE) {
+                        Icons.Rounded.RepeatOne
+                    } else {
+                        Icons.Rounded.Repeat
+                    },
+                    contentDescription = "Repeat",
+                    tint = if (uiState.repeatMode != Player.REPEAT_MODE_OFF) Color.White else MochyPalette.MutedText
+                )
+            }
+        }
+    }
+}

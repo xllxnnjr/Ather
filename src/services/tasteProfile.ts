@@ -301,17 +301,24 @@ export function markReelsSeen(trackIds: string[]): UserMusicProfile {
  */
 export function getRankedCategories(profile?: UserMusicProfile): string[] {
   const p = profile ?? loadUserMusicProfile();
-  const coreDiscovery = ['Hip Hop', 'Pop', 'R&B', 'Electronic', 'Afrobeats', 'Party', 'Blues', 'Sad'];
+  const coreDiscovery = ['hip hop', 'pop', 'r&b', 'electronic', 'afrobeats', 'party', 'blues', 'sad'];
+  const scoreMap = new Map<string, number>();
+  for (const [k, v] of Object.entries(p.genreScores)) {
+    const low = k.trim().toLowerCase();
+    if (!low || low === 'all') continue;
+    scoreMap.set(low, Math.max(scoreMap.get(low) ?? 0, v));
+  }
+
   const allNames = Array.from(
     new Set([
-      ...p.onboardingGenres,
-      ...Object.keys(p.genreScores),
+      ...p.onboardingGenres.map((g) => g.trim().toLowerCase()).filter(Boolean),
+      ...Array.from(scoreMap.keys()),
       ...coreDiscovery,
     ])
-  );
+  ).filter((g) => g !== 'all');
 
-  allNames.sort((a, b) => (p.genreScores[b] ?? 0) - (p.genreScores[a] ?? 0));
-  return ['All', ...allNames.slice(0, 8)];
+  allNames.sort((a, b) => (scoreMap.get(b) ?? 0) - (scoreMap.get(a) ?? 0));
+  return ['all', ...allNames.slice(0, 8)];
 }
 
 /**

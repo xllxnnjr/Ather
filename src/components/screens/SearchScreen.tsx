@@ -30,9 +30,20 @@ import {
   ShowcaseTrack,
   UserPlaylist,
 } from '../../types/music';
+import portraitSinger from '../../assets/images/login_portrait_singer_1795680683171.jpg';
+import portraitProducer from '../../assets/images/login_portrait_producer_1795680684778.jpg';
+import portraitGuitarist from '../../assets/images/login_portrait_guitarist_1795680684411.jpg';
+import portraitListener from '../../assets/images/login_portrait_listener_1795680685672.jpg';
 import { PopupSheet } from '../PopupSheet';
 import { PlaylistCover, ShowcaseArtwork } from '../ShowcaseArtwork';
 import { TrackInfoModal } from '../TrackInfoModal';
+
+const GENRE_PORTRAIT_FALLBACKS = [
+  portraitSinger,
+  portraitProducer,
+  portraitGuitarist,
+  portraitListener,
+];
 
 type SearchFilterTab = 'all' | 'songs' | 'artists' | 'albums';
 
@@ -318,8 +329,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   return (
     <div className="space-y-8">
       {/* Search Bar */}
-      <div className="bg-[#111114] border border-white/25 rounded-full pl-5 pr-3 py-2.5 flex items-center gap-2.5 focus-within:border-white transition-colors shadow-lg">
-        <SearchInputGlyph className="w-4 h-4 text-white/75 shrink-0" />
+      <div className="ather-depth-pill rounded-full pl-5 pr-3 py-2.5 flex items-center gap-2.5 focus-within:border-white transition-colors">
+        <SearchInputGlyph className="w-4 h-4 text-white shrink-0" />
         <input
           type="text"
           value={query}
@@ -329,17 +340,17 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               void runSearch(query, true);
             }
           }}
-          placeholder="Search for a song, artist, or genre"
-          aria-label="Search for a song"
-          className="w-full bg-transparent text-sm sm:text-base font-bold text-white placeholder:text-white/55 focus:outline-none py-1"
+          placeholder="artists, songs, lyrics, and more"
+          aria-label="search for a song"
+          className="w-full bg-transparent text-sm sm:text-base font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none py-1"
         />
 
         {showingResults && (
           <button
             type="button"
             onClick={handleClearAll}
-            aria-label="Clear search"
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors shrink-0"
+            aria-label="clear search"
+            className="ather-depth-btn w-9 h-9 rounded-full flex items-center justify-center text-white transition-colors shrink-0"
           >
             <CloseGlyph className="w-4 h-4" />
           </button>
@@ -347,7 +358,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       </div>
 
       {showingResults ? (
-        <section aria-label="Search Results" className="space-y-5">
+        <section aria-label="search results" className="space-y-5">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -355,19 +366,19 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   <button
                     type="button"
                     onClick={handleClearAll}
-                    aria-label="Back to Mood & Genres"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#141416] border border-white/15 text-xs font-bold text-white hover:border-white/35 active:scale-95 transition-all shrink-0"
+                    aria-label="back to mood & genres"
+                    className="ather-depth-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform shrink-0"
                   >
                     <ChevronLeftGlyph className="w-3.5 h-3.5" />
-                    <span>Mood &amp; Genres</span>
+                    <span>mood &amp; genres</span>
                   </button>
                 )}
-                <div className="text-xs font-semibold text-white/65 truncate">
+                <div className="text-xs font-bold text-[#A1A1AA] truncate">
                   {loading && totalCount > 0
-                    ? `${totalCount} ${totalCount === 1 ? 'result' : 'results'} · Updating...`
+                    ? `${totalCount} ${totalCount === 1 ? 'result' : 'results'} · updating...`
                     : loading
-                    ? `Searching for “${activeTerm}”...`
-                    : `${totalCount} ${totalCount === 1 ? 'result' : 'results'} for “${activeTerm}”`}
+                    ? `searching for “${activeTerm.toLowerCase()}”...`
+                    : `${totalCount} ${totalCount === 1 ? 'result' : 'results'} for “${activeTerm.toLowerCase()}”`}
                 </div>
               </div>
             </div>
@@ -376,10 +387,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
               {(
                 [
-                  { id: 'all', label: 'All' },
-                  { id: 'songs', label: `Songs (${results.length})` },
-                  { id: 'artists', label: `Artists (${artistResults.length})` },
-                  { id: 'albums', label: `Albums (${albumResults.length})` },
+                  { id: 'all', label: 'all' },
+                  { id: 'songs', label: `songs (${results.length})` },
+                  { id: 'artists', label: `artists (${artistResults.length})` },
+                  { id: 'albums', label: `albums (${albumResults.length})` },
                 ] as const
               ).map((chip) => {
                 const active = filterTab === chip.id;
@@ -390,8 +401,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     onClick={() => setFilterTab(chip.id)}
                     className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-colors ${
                       active
-                        ? 'bg-white text-black'
-                        : 'bg-[#141416] text-white/75 hover:text-white'
+                        ? 'bg-white text-black border border-white'
+                        : 'ather-depth-pill text-[#A1A1AA] hover:text-white'
                     }`}
                   >
                     {chip.label}
@@ -402,40 +413,40 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           </div>
 
           {loading && totalCount === 0 ? (
-            <div className="rounded-3xl bg-[#0E0E10] border border-white/12 divide-y divide-white/[0.08] overflow-hidden">
+            <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
               {[0, 1, 2, 3, 4, 5].map((idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-3.5 px-4 py-3.5 animate-pulse"
+                  className="ather-depth-row rounded-2xl flex items-center gap-3.5 px-3.5 py-3 animate-pulse"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-white/[0.08] shrink-0" />
+                  <div className="w-12 h-12 rounded-xl bg-[#141418] border border-[#242429] shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-2/5 rounded bg-white/[0.1]" />
-                    <div className="h-3 w-1/4 rounded bg-white/[0.06]" />
+                    <div className="h-3.5 w-2/5 rounded bg-[#141418]" />
+                    <div className="h-3 w-1/4 rounded bg-[#141418]" />
                   </div>
-                  <div className="w-9 h-9 rounded-full bg-white/[0.08] shrink-0" />
+                  <div className="w-9 h-9 rounded-full bg-[#141418] shrink-0" />
                 </div>
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-3xl bg-[#0E0E10] border border-white/15 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="ather-depth-card rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-sm font-bold text-white">
-                  Search unavailable
+                <div className="text-sm font-extrabold text-white">
+                  search unavailable
                 </div>
-                <p className="text-xs text-white/60">{error}</p>
+                <p className="text-xs font-bold text-[#A1A1AA]">{error.toLowerCase()}</p>
               </div>
               <button
                 type="button"
                 onClick={() => void runSearch(activeTerm, false)}
-                className="self-start sm:self-auto px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 shrink-0"
+                className="ather-acid-btn self-start sm:self-auto px-4 py-2 rounded-full text-xs font-extrabold shrink-0"
               >
-                Retry
+                retry
               </button>
             </div>
           ) : totalCount === 0 ? (
-            <div className="rounded-3xl bg-[#0E0E10] border border-white/12 p-8 text-center text-sm text-white/60">
-              No songs, artists, or albums found for “{activeTerm}”.
+            <div className="ather-depth-card rounded-3xl p-8 text-center text-sm font-bold text-[#A1A1AA]">
+              no songs, artists, or albums found for “{activeTerm.toLowerCase()}”.
             </div>
           ) : (
             <div className="space-y-6">
@@ -443,7 +454,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               {filterTab === 'all' && topResult && (
                 <div className="space-y-3">
                   <h2 className="text-sm font-extrabold text-white tracking-tight">
-                    Top Result
+                    top result
                   </h2>
 
                   {topResult.type === 'artist' ? (
@@ -453,10 +464,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         if (query.trim()) saveRecentSearch(query.trim());
                         onOpenArtist(topResult.data.name);
                       }}
-                      className="w-full rounded-2xl bg-[#111114] border border-white/25 p-4 flex items-center justify-between gap-4 text-left hover:border-white/45 active:scale-[0.99] transition-all"
+                      className="ather-depth-card w-full rounded-2xl p-4 flex items-center justify-between gap-4 text-left hover:border-white active:scale-[0.99] transition-colors"
                     >
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border border-[#242429] shrink-0">
                           <ShowcaseArtwork
                             style={topResult.data.artwork}
                             coverUrl={topResult.data.photoUrl}
@@ -467,20 +478,21 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         </div>
                         <div className="min-w-0 space-y-1">
                           <div className="text-base sm:text-lg font-black text-white truncate">
-                            {topResult.data.name}
+                            {topResult.data.name.toLowerCase()}
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-bold text-white/75">
-                            <span className="px-2 py-0.5 rounded-full bg-white text-black text-[10px] font-extrabold uppercase tracking-wider">
-                              Artist
-                            </span>
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-[#A1A1AA]">
+                            <span className="text-white font-extrabold">artist</span>
                             {topResult.data.genre && (
-                              <span className="truncate">{topResult.data.genre}</span>
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span className="truncate">{topResult.data.genre.toLowerCase()}</span>
+                              </>
                             )}
                           </div>
                         </div>
                       </div>
-                      <span className="px-3.5 py-1.5 rounded-full bg-white/15 text-xs font-extrabold text-white shrink-0">
-                        Open
+                      <span className="ather-depth-pill px-3.5 py-1.5 rounded-full text-xs font-extrabold text-white shrink-0">
+                        open
                       </span>
                     </button>
                   ) : topResult.type === 'album' ? (
@@ -490,10 +502,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         if (query.trim()) saveRecentSearch(query.trim());
                         onOpenAlbum?.(topResult.data);
                       }}
-                      className="w-full rounded-2xl bg-[#111114] border border-white/25 p-4 flex items-center justify-between gap-4 text-left hover:border-white/45 active:scale-[0.99] transition-all"
+                      className="ather-depth-card w-full rounded-2xl p-4 flex items-center justify-between gap-4 text-left hover:border-white active:scale-[0.99] transition-colors"
                     >
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-white/20">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border-2 border-black">
                           <ShowcaseArtwork
                             style={topResult.data.artwork}
                             coverUrl={topResult.data.coverUrl}
@@ -504,21 +516,20 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         </div>
                         <div className="min-w-0 space-y-1">
                           <div className="text-base sm:text-lg font-black text-white truncate">
-                            {topResult.data.title}
+                            {topResult.data.title.toLowerCase()}
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-bold text-white/75">
-                            <span className="px-2 py-0.5 rounded-full bg-white text-black text-[10px] font-extrabold uppercase tracking-wider shrink-0">
-                              Album
-                            </span>
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-[#A1A1AA]">
+                            <span className="text-white font-extrabold shrink-0">album</span>
+                            <span aria-hidden="true">·</span>
                             <span className="truncate">
-                              {topResult.data.artist}
+                              {topResult.data.artist.toLowerCase()}
                               {topResult.data.year ? ` · ${topResult.data.year}` : ''}
                             </span>
                           </div>
                         </div>
                       </div>
-                      <span className="px-3.5 py-1.5 rounded-full bg-white/15 text-xs font-extrabold text-white shrink-0">
-                        View
+                      <span className="ather-depth-pill px-3.5 py-1.5 rounded-full text-xs font-extrabold text-white shrink-0">
+                        view
                       </span>
                     </button>
                   ) : (
@@ -527,7 +538,9 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       const isCurrent = currentTrack?.id === topTrack.id;
                       return (
                         <div
-                          className="w-full rounded-2xl bg-[#111114] border border-white/25 p-4 flex items-center justify-between gap-4 hover:border-white/45 transition-all"
+                          className={`ather-depth-card w-full rounded-2xl p-4 flex items-center justify-between gap-4 transition-colors ${
+                            isCurrent ? 'border-white' : ''
+                          }`}
                         >
                           <button
                             type="button"
@@ -538,7 +551,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             }}
                             className="flex items-center gap-4 min-w-0 flex-1 text-left"
                           >
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-white/12">
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-[#242429]">
                               <ShowcaseArtwork
                                 style={topTrack.artwork}
                                 coverUrl={topTrack.coverUrl}
@@ -549,14 +562,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             </div>
                             <div className="min-w-0 space-y-1">
                               <div className="text-base sm:text-lg font-black text-white truncate">
-                                {topTrack.title}
+                                {topTrack.title.toLowerCase()}
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-white/60">
-                                <span className="px-2 py-0.5 rounded-full bg-white text-black text-[10px] font-extrabold uppercase tracking-wider shrink-0">
-                                  Song
-                                </span>
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-[#A1A1AA]">
+                                <span className="text-white font-extrabold shrink-0">song</span>
+                                <span aria-hidden="true">·</span>
                                 <span className="truncate">
-                                  {topTrack.artist} · {formatDuration(topTrack.duration)}
+                                  {topTrack.artist.toLowerCase()} · {formatDuration(topTrack.duration)}
                                 </span>
                               </div>
                             </div>
@@ -564,7 +576,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
                           <button
                             type="button"
-                            aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+                            aria-label={isCurrent && isPlaying ? 'pause' : 'play'}
                             onClick={() => {
                               if (query.trim()) saveRecentSearch(query.trim());
                               if (isCurrent) onTogglePlay();
@@ -573,7 +585,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                                 onSelectTrack(topTrack, true);
                               }
                             }}
-                            className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.28)] hover:bg-white/90 active:scale-90 transition-all shrink-0"
+                            className="ather-acid-btn w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0"
                           >
                             {isCurrent && isPlaying ? (
                               <PauseGlyph className="w-5 h-5" />
@@ -588,24 +600,24 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 </div>
               )}
 
-              {/* Songs List (prioritized right after Top Result in All tab or under Songs filter) */}
+              {/* Songs List */}
               {(filterTab === 'all' || filterTab === 'songs') &&
                 results.length > 0 && (
                   <div className="space-y-3">
                     {filterTab === 'all' && (
                       <h2 className="text-sm font-extrabold text-white tracking-tight">
-                        Songs
+                        songs
                       </h2>
                     )}
-                    <div className="rounded-3xl bg-[#141416] border border-white/12 divide-y divide-white/[0.08] overflow-hidden">
+                    <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
                       {(filterTab === 'all' ? results.slice(0, 6) : results).map((track) => {
                         const isCurrent = currentTrack?.id === track.id;
 
                         return (
                           <div
                             key={track.id}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.06] transition-colors ${
-                              isCurrent ? 'bg-white/[0.08]' : ''
+                            className={`ather-depth-row rounded-2xl w-full flex items-center gap-3 px-3.5 py-3 transition-colors ${
+                              isCurrent ? 'ring-2 ring-white' : ''
                             }`}
                           >
                             <button
@@ -615,8 +627,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                                 onRecordSearch?.(activeTerm, track);
                                 onSelectTrack(track, true);
                               }}
-                              className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10"
-                              aria-label={`Play ${track.title}`}
+                              className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-[#242429]"
+                              aria-label={`play ${track.title.toLowerCase()}`}
                             >
                               <ShowcaseArtwork
                                 style={track.artwork}
@@ -636,33 +648,33 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                                   onSelectTrack(track, true);
                                 }}
                                 className={`block max-w-full text-sm font-bold truncate text-left ${
-                                  isCurrent ? 'text-white' : 'text-white/95'
+                                  isCurrent ? 'text-white' : 'text-[#E4E4E7]'
                                 }`}
                               >
-                                {track.title}
+                                {track.title.toLowerCase()}
                               </button>
-                              <div className="flex items-center gap-1.5 text-xs text-white/55 truncate mt-0.5">
+                              <div className="flex items-center gap-1.5 text-xs text-[#A1A1AA] truncate mt-0.5">
                                 <button
                                   type="button"
                                   onClick={() => onOpenArtist(track.artist)}
                                   className="hover:text-white hover:underline truncate transition-colors"
                                 >
-                                  {track.artist}
+                                  {track.artist.toLowerCase()}
                                 </button>
                                 <span aria-hidden="true">·</span>
-                                <span className="truncate">{track.album}</span>
+                                <span className="truncate">{track.album.toLowerCase()}</span>
                               </div>
                             </div>
 
-                            <span className="hidden sm:inline text-xs tabular-nums text-white/50 shrink-0">
+                            <span className="hidden sm:inline text-xs tabular-nums text-[#A1A1AA] shrink-0">
                               {formatDuration(track.duration)}
                             </span>
 
                             <button
                               type="button"
-                              aria-label={`Song info and options for ${track.title}`}
+                              aria-label={`song info and options for ${track.title.toLowerCase()}`}
                               onClick={() => setInfoTrack(track)}
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                              className="w-9 h-9 rounded-full flex items-center justify-center text-[#A1A1AA] hover:text-white transition-colors shrink-0"
                             >
                               <MoreDotsGlyph className="w-4 h-4" />
                             </button>
@@ -677,11 +689,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                                   onSelectTrack(track, true);
                                 }
                               }}
-                              aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
-                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                              aria-label={isCurrent && isPlaying ? 'pause' : 'play'}
+                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 ${
                                 isCurrent
-                                  ? 'bg-white text-black shadow-[0_0_16px_rgba(255,255,255,0.28)]'
-                                  : 'bg-white/10 text-white hover:bg-white/20'
+                                  ? 'ather-acid-btn'
+                                  : 'ather-depth-btn text-white'
                               }`}
                             >
                               {isCurrent && isPlaying ? (
@@ -697,12 +709,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   </div>
                 )}
 
-              {/* Artists Strip (strictly borderless circular portraits) */}
+              {/* Artists Strip */}
               {(filterTab === 'all' || filterTab === 'artists') &&
                 artistResults.length > 0 && (
                   <div className="space-y-3">
                     <h2 className="text-sm font-extrabold text-white tracking-tight">
-                      Artists
+                      artists
                     </h2>
                     <div
                       className={
@@ -721,11 +733,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                           }}
                           className={`group flex flex-col items-center text-center transition-transform active:scale-95 ${
                             filterTab === 'artists'
-                              ? 'w-full rounded-2xl bg-[#141416] border border-white/12 p-4 hover:border-white/35'
+                              ? 'ather-depth-card w-full rounded-2xl p-4 hover:border-white'
                               : 'shrink-0 w-[96px] sm:w-[108px]'
                           }`}
                         >
-                          <div className="w-[82px] h-[82px] sm:w-[92px] sm:h-[92px] rounded-full overflow-hidden group-hover:scale-105 transition-transform">
+                          <div className="w-[82px] h-[82px] sm:w-[92px] sm:h-[92px] rounded-full overflow-hidden border border-[#242429] group-hover:border-white group-hover:scale-105 transition-all">
                             <ShowcaseArtwork
                               style={artist.artwork}
                               coverUrl={artist.photoUrl}
@@ -735,10 +747,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             />
                           </div>
                           <span className="mt-2.5 w-full text-[13px] font-bold text-white truncate">
-                            {artist.name}
+                            {artist.name.toLowerCase()}
                           </span>
-                          <span className="mt-0.5 w-full text-[11px] text-white/50 truncate">
-                            {artist.genre || 'Artist'}
+                          <span className="mt-0.5 w-full text-[11px] font-bold text-[#A1A1AA] truncate">
+                            {(artist.genre || 'artist').toLowerCase()}
                           </span>
                         </button>
                       ))}
@@ -751,7 +763,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 albumResults.length > 0 && (
                   <div className="space-y-3">
                     <h2 className="text-sm font-extrabold text-white tracking-tight">
-                      Albums
+                      albums
                     </h2>
                     <div
                       className={
@@ -774,7 +786,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                               : 'shrink-0 w-[138px] sm:w-[156px]'
                           }`}
                         >
-                          <div className="w-full aspect-square rounded-xl overflow-hidden border border-white/12 group-hover:border-white/35 transition-colors">
+                          <div className="w-full aspect-square rounded-xl overflow-hidden border border-[#242429] group-hover:border-white transition-colors">
                             <ShowcaseArtwork
                               style={album.artwork}
                               coverUrl={album.coverUrl}
@@ -784,10 +796,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                             />
                           </div>
                           <div className="mt-2 text-xs sm:text-sm font-bold text-white truncate">
-                            {album.title}
+                            {album.title.toLowerCase()}
                           </div>
-                          <div className="text-[11px] text-white/55 truncate mt-0.5">
-                            {album.artist}
+                          <div className="text-[11px] text-[#A1A1AA] truncate mt-0.5">
+                            {album.artist.toLowerCase()}
                             {album.year ? ` · ${album.year}` : ''}
                           </div>
                         </button>
@@ -803,25 +815,25 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         <div className="space-y-8">
           {/* Minimal Horizontal Recent Searches */}
           {recentSearches.length > 0 && (
-            <section aria-label="Recent Searches" className="space-y-2.5">
+            <section aria-label="recent searches" className="space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-xs font-extrabold uppercase tracking-wider text-white/75 flex items-center gap-1.5">
-                  <ClockGlyph className="w-3.5 h-3.5 text-white/70" />
-                  <span>Recent</span>
+                <h2 className="text-xs font-extrabold tracking-wider text-[#A1A1AA] flex items-center gap-1.5">
+                  <ClockGlyph className="w-3.5 h-3.5 text-white" />
+                  <span>recent</span>
                 </h2>
                 <button
                   type="button"
                   onClick={clearRecentSearches}
-                  className="text-[11px] font-bold text-white/70 hover:text-white transition-colors"
+                  className="text-[11px] font-extrabold text-white hover:opacity-80 transition-opacity"
                 >
-                  Clear
+                  clear
                 </button>
               </div>
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 {recentSearches.map((term) => (
                   <div
                     key={term}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#111114] border border-white/25 hover:border-white/45 pl-3.5 pr-1.5 py-1.5 text-xs font-bold text-white transition-colors"
+                    className="ather-depth-pill shrink-0 inline-flex items-center gap-1 rounded-full pl-3.5 pr-1.5 py-1.5 text-xs font-bold text-white transition-colors"
                   >
                     <button
                       type="button"
@@ -829,15 +841,15 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         setQuery(term);
                         void runSearch(term, true);
                       }}
-                      className="hover:text-white whitespace-nowrap max-w-[160px] truncate"
+                      className="hover:opacity-80 whitespace-nowrap max-w-[160px] truncate"
                     >
-                      {term}
+                      {term.toLowerCase()}
                     </button>
                     <button
                       type="button"
-                      aria-label={`Remove ${term} from recent searches`}
+                      aria-label={`remove ${term.toLowerCase()} from recent searches`}
                       onClick={() => removeRecentSearch(term)}
-                      className="w-5 h-5 rounded-full hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white shrink-0 transition-colors"
+                      className="w-5 h-5 rounded-full hover:bg-black flex items-center justify-center text-[#A1A1AA] hover:text-white shrink-0 transition-colors"
                     >
                       <CloseGlyph className="w-3 h-3" />
                     </button>
@@ -847,38 +859,43 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             </section>
           )}
 
-          {/* Interactive Mood & Genres Grid with Real Artist/Album Artwork */}
-          <section aria-label="Mood & Genres" className="space-y-4">
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-              Mood &amp; Genres
+          {/* Full-Bleed B&W Portrait Mood & Genres Grid */}
+          <section aria-label="mood & genres" className="space-y-4">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+              mood &amp; genres
             </h2>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4">
-              {MOOD_GENRE_TILES.map((tile) => {
+              {MOOD_GENRE_TILES.map((tile, idx) => {
                 const liveCover = genreCovers[tile.searchQuery];
+                const fallbackPortrait =
+                  GENRE_PORTRAIT_FALLBACKS[idx % GENRE_PORTRAIT_FALLBACKS.length];
                 return (
                   <button
                     key={tile.id}
                     type="button"
                     onClick={() => handleSelectGenreTile(tile.title, tile.searchQuery)}
-                    className="group relative h-[112px] sm:h-[128px] rounded-2xl p-4 overflow-hidden text-left border border-white/12 shadow-lg hover:border-white/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                    style={{
-                      background: `linear-gradient(135deg, ${tile.gradientFrom} 0%, ${tile.gradientTo} 100%)`,
-                    }}
+                    className="group relative aspect-[4/3] w-full rounded-2xl overflow-hidden border border-[#242429] hover:border-white bg-[#0D0D10] text-left active:scale-[0.98] transition-all"
                   >
-                    <span className="relative z-10 text-base sm:text-lg font-extrabold text-white leading-tight block max-w-[65%]">
-                      {tile.title}
+                    <img
+                      src={liveCover || fallbackPortrait}
+                      alt={tile.title.toLowerCase()}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (img.dataset.fallbackApplied === '1') return;
+                        img.dataset.fallbackApplied = '1';
+                        img.src = fallbackPortrait;
+                      }}
+                      className="absolute inset-0 w-full h-full object-cover object-top grayscale contrast-110 transition-transform duration-300 group-hover:scale-[1.04]"
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent pointer-events-none"
+                    />
+                    <span className="absolute left-3.5 right-3 bottom-3 z-10 text-base sm:text-lg font-black text-white leading-tight truncate">
+                      {tile.title.toLowerCase()}
                     </span>
-
-                    <div className="absolute -bottom-3 -right-2 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden rotate-[14deg] shadow-2xl border border-white/20 transition-transform duration-300 group-hover:rotate-[8deg] group-hover:scale-105 pointer-events-none">
-                      <ShowcaseArtwork
-                        style={tile.artwork}
-                        coverUrl={liveCover}
-                        alt={tile.title}
-                        compact={true}
-                        className="w-full h-full"
-                      />
-                    </div>
                   </button>
                 );
               })}
@@ -908,14 +925,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       {playlistPickerTrack && (
         <PopupSheet
           onClose={() => setPlaylistPickerTrack(null)}
-          ariaLabel="Add to Playlist"
+          ariaLabel="add to playlist"
           variant="bottom"
           maxWidthClass="max-w-md"
           maxHeightClass="max-h-[82dvh]"
         >
-          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b-2 border-black shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/15 shrink-0">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-black shrink-0">
                 <ShowcaseArtwork
                   style={playlistPickerTrack.artwork}
                   coverUrl={playlistPickerTrack.coverUrl}
@@ -926,18 +943,18 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               </div>
               <div className="min-w-0">
                 <h2 className="text-base font-extrabold text-white truncate">
-                  Add to Playlist
+                  add to playlist
                 </h2>
-                <p className="text-xs text-white/55 truncate mt-0.5">
-                  {playlistPickerTrack.title} · {playlistPickerTrack.artist}
+                <p className="text-xs font-bold text-[#A1A1AA] truncate mt-0.5">
+                  {playlistPickerTrack.title.toLowerCase()} · {playlistPickerTrack.artist.toLowerCase()}
                 </p>
               </div>
             </div>
             <button
               type="button"
-              aria-label="Close"
+              aria-label="close"
               onClick={() => setPlaylistPickerTrack(null)}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors"
+              className="ather-depth-btn w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0 transition-colors"
             >
               <CloseGlyph className="w-4 h-4" />
             </button>
@@ -945,15 +962,15 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
           <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto no-scrollbar">
             {addedMsg && (
-              <div className="rounded-2xl bg-white text-black px-3.5 py-2.5 text-xs font-extrabold flex items-center gap-2">
+              <div className="ather-acid-btn rounded-2xl px-3.5 py-2.5 text-xs font-extrabold flex items-center gap-2">
                 <CheckGlyph className="w-4 h-4 shrink-0" />
-                <span className="truncate">{addedMsg}</span>
+                <span className="truncate">{addedMsg.toLowerCase()}</span>
               </div>
             )}
 
             {playlists.length === 0 ? (
-              <p className="text-xs text-white/55 py-8 text-center">
-                No playlists yet. Create one under Library → Playlists first.
+              <p className="text-xs font-bold text-[#A1A1AA] py-8 text-center">
+                no playlists yet. create one under library → playlists first.
               </p>
             ) : (
               <div className="space-y-2">
@@ -974,16 +991,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         try {
                           await onAddTrackToPlaylist(pl.id, playlistPickerTrack);
                           setAddedMsg(
-                            `Added “${playlistPickerTrack.title}” to ${pl.name}`
+                            `added “${playlistPickerTrack.title}” to ${pl.name}`
                           );
                         } finally {
                           setResolvingAddId(null);
                         }
                       }}
-                      className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-2xl bg-black/75 border border-white/12 hover:border-white/35 text-left transition-colors"
+                      className="ather-depth-row w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-2xl text-left transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-white/10">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-[#242429]">
                           <PlaylistCover
                             coverImageUrl={pl.coverImageUrl}
                             coverArtwork={pl.coverArtwork}
@@ -996,9 +1013,9 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-bold text-white truncate">
-                            {pl.name}
+                            {pl.name.toLowerCase()}
                           </div>
-                          <div className="text-xs text-white/55 tabular-nums">
+                          <div className="text-xs text-[#A1A1AA] tabular-nums">
                             {pl.trackIds.length}{' '}
                             {pl.trackIds.length === 1 ? 'song' : 'songs'}
                           </div>
@@ -1008,8 +1025,8 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       <span
                         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${
                           alreadyIn
-                            ? 'bg-white text-black'
-                            : 'bg-white/10 text-white'
+                            ? 'ather-acid-btn'
+                            : 'ather-depth-btn text-white'
                         }`}
                       >
                         {alreadyIn ? (

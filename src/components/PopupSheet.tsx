@@ -151,7 +151,7 @@ export const PopupSheet: React.FC<PopupSheetProps> = ({
       exit={{ opacity: 0 }}
       transition={{ duration: isDragging ? 0 : 0.18 }}
       onClick={onClose}
-      className={`fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex justify-center ${
+      className={`fixed inset-0 z-50 bg-black/85 flex justify-center ${
         variant === 'center'
           ? 'items-center pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4'
           : 'items-end sm:items-center pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[max(1rem,env(safe-area-inset-top))] pb-0 sm:p-4'
@@ -171,11 +171,10 @@ export const PopupSheet: React.FC<PopupSheetProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
-        style={{ backgroundColor: '#111114' }}
-        className={`w-full ${maxWidthClass} ${maxHeightClass} border border-white/25 shadow-[0_28px_80px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden ${
+        className={`ather-depth-card w-full ${maxWidthClass} ${maxHeightClass} flex flex-col overflow-hidden ${
           variant === 'center'
             ? 'rounded-3xl'
-            : 'rounded-t-3xl sm:rounded-3xl border-b-0 sm:border-b pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0'
+            : 'rounded-t-3xl sm:rounded-3xl border-b-0 sm:border-b-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0'
         } ${className}`}
       >
         <div
@@ -183,7 +182,7 @@ export const PopupSheet: React.FC<PopupSheetProps> = ({
           aria-hidden="true"
           className="flex justify-center pt-2.5 pb-1 shrink-0 cursor-grab active:cursor-grabbing touch-none"
         >
-          <div className="w-10 h-1 rounded-full bg-white/25" />
+          <div className="w-10 h-1 rounded-full bg-[#A1A1AA]/40" />
         </div>
         {children}
       </motion.div>

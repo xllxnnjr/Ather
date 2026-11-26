@@ -73,13 +73,13 @@ export function isDeviceRecentlyOnline(device: RegisteredDevice): boolean {
 
 export function formatDeviceLastSeen(lastSeenAt: number): string {
   const diffMs = Math.max(0, Date.now() - Number(lastSeenAt || 0));
-  if (diffMs <= 60_000) return 'Online now';
+  if (diffMs <= 60_000) return 'online now';
   const mins = Math.floor(diffMs / 60_000);
-  if (mins < 60) return `Active ${mins}m ago`;
+  if (mins < 60) return `active ${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `Active ${hours}h ago`;
+  if (hours < 24) return `active ${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `Active ${days}d ago`;
+  return `active ${days}d ago`;
 }
 
 function detectDeviceMeta(): {
@@ -88,7 +88,7 @@ function detectDeviceMeta(): {
   platform: string;
 } {
   if (typeof navigator === 'undefined') {
-    return { name: 'Web Player', type: 'desktop', platform: 'Web' };
+    return { name: 'web player', type: 'desktop', platform: 'web' };
   }
   const ua = navigator.userAgent;
   const isCapacitor =
@@ -102,22 +102,22 @@ function detectDeviceMeta(): {
   const isLinux = /Linux/i.test(ua);
 
   const browser = isCapacitor
-    ? 'App'
+    ? 'app'
     : /Edg\//i.test(ua)
-    ? 'Edge'
+    ? 'edge'
     : /Chrome\//i.test(ua)
-    ? 'Chrome'
+    ? 'chrome'
     : /Safari\//i.test(ua)
-    ? 'Safari'
+    ? 'safari'
     : /Firefox\//i.test(ua)
-    ? 'Firefox'
-    : 'Browser';
+    ? 'firefox'
+    : 'browser';
 
   if (isAndroid) {
     return {
-      name: isCapacitor ? 'ATHER for Android' : `Android (${browser})`,
+      name: isCapacitor ? 'Ather for android' : `android (${browser})`,
       type: 'mobile',
-      platform: 'Android',
+      platform: 'android',
     };
   }
   if (isIPhone) {
@@ -150,12 +150,12 @@ function detectDeviceMeta(): {
   }
   if (isLinux) {
     return {
-      name: `Linux Workstation (${browser})`,
+      name: `linux (${browser})`,
       type: 'desktop',
-      platform: 'Linux',
+      platform: 'linux',
     };
   }
-  return { name: `Web Player (${browser})`, type: 'desktop', platform: 'Web' };
+  return { name: `web player (${browser})`, type: 'desktop', platform: 'web' };
 }
 
 export function getLocalDeviceId(uid?: string | null): string {
@@ -347,11 +347,10 @@ function sanitizeTrackForShared(track: ShowcaseTrack): ShowcaseTrack {
     previewUrl: track.previewUrl,
     streamUrl: track.streamUrl,
     streamStatus: track.streamStatus,
-    youtubeVideoId: track.youtubeVideoId,
-    youtubeCandidates: Array.isArray(track.youtubeCandidates)
-      ? track.youtubeCandidates.slice(0, 6)
-      : undefined,
     source: track.source,
+    isAudius: track.isAudius,
+    explicit: track.explicit,
+    releaseDate: track.releaseDate,
     collectionId: track.collectionId,
     accentColor: track.accentColor || '#FFFFFF',
     glowColor: track.glowColor || 'rgba(255, 255, 255, 0.22)',

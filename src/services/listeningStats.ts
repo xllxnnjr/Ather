@@ -101,11 +101,8 @@ function sanitizeTrackForStats(track: ShowcaseTrack): ShowcaseTrack {
     previewUrl: track.previewUrl,
     streamUrl: track.streamUrl,
     streamStatus: track.streamStatus,
-    youtubeVideoId: track.youtubeVideoId,
-    youtubeCandidates: Array.isArray(track.youtubeCandidates)
-      ? track.youtubeCandidates.slice(0, 6)
-      : undefined,
     source: track.source,
+    isAudius: track.isAudius,
     releaseDate: track.releaseDate,
     collectionId: track.collectionId,
     accentColor: track.accentColor || '#FFFFFF',

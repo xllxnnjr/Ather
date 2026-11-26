@@ -20,7 +20,6 @@ if (fs.existsSync(manifestPath)) {
     'android.permission.WAKE_LOCK',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
-    'android.permission.RECORD_AUDIO',
     'android.permission.POST_NOTIFICATIONS',
   ];
 
@@ -37,6 +36,13 @@ if (fs.existsSync(manifestPath)) {
     manifest = manifest.replace(
       '<application',
       '<application\n        android:usesCleartextTraffic="true"'
+    );
+  }
+
+  if (!manifest.includes('MediaSessionService')) {
+    manifest = manifest.replace(
+      '</application>',
+      '        <service\n            android:name=".MediaSessionService"\n            android:foregroundServiceType="mediaPlayback"\n            android:exported="false" />\n    </application>'
     );
   }
 

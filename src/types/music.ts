@@ -1,4 +1,4 @@
-export type CategoryPill = 'All' | 'Party' | 'Blues' | 'Sad' | 'Hip Hop';
+export type CategoryPill = string;
 export type RepeatMode = 'off' | 'all' | 'one';
 
 export type ArtworkStyle =
@@ -11,7 +11,7 @@ export type ArtworkStyle =
   | 'carbon-ring'
   | 'monolith-lime';
 
-export type TrackSource = 'itunes' | 'youtube' | 'audius';
+export type TrackSource = 'itunes' | 'audius';
 export type StreamResolutionStatus =
   | 'unresolved'
   | 'resolving'
@@ -40,9 +40,6 @@ export interface ShowcaseTrack {
   id: string;
   itunesId?: string;
   audiusId?: string;
-  youtubeVideoId?: string;
-  youtubeCandidates?: string[];
-  youtubeChannelTitle?: string;
   isSyncedLyrics?: boolean;
   title: string;
   artist: string;
@@ -50,7 +47,7 @@ export interface ShowcaseTrack {
   collectionId?: string;
   duration: number; // seconds
   durationMs?: number;
-  category: Exclude<CategoryPill, 'All'>;
+  category: string;
   genre?: string;
   artwork: ArtworkStyle;
   coverUrl?: string;
@@ -62,6 +59,7 @@ export interface ShowcaseTrack {
   source: TrackSource;
   isAudius?: boolean;
   streamStatus?: StreamResolutionStatus;
+  streamSource?: 'innertube' | 'piped' | 'audius' | 'itunes-preview';
   playCount?: number;
   accentColor: string;
   glowColor: string;

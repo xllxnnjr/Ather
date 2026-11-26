@@ -1,7 +1,5 @@
 import React, {
-  useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -53,7 +51,7 @@ import {
   loadLocalActivityStats,
   syncActivityStatsFromCloud,
 } from '../../services/listeningStats';
-import { searchRealSongs, searchYouTubeTracks } from '../../services/musicApi';
+import { searchRealSongs } from '../../services/musicApi';
 import {
   loadUserMusicProfile,
   toggleFollowedArtistInProfile,
@@ -134,16 +132,16 @@ const SUB_TABS: {
   label: string;
   icon: React.ComponentType<AppIconProps>;
 }[] = [
-  { id: 'playlists', label: 'Playlists', icon: PlaylistsGlyph },
-  { id: 'downloads', label: 'Downloads', icon: DownloadGlyph },
-  { id: 'artists', label: 'Artists', icon: UserGlyph },
-  { id: 'activity', label: 'Activity', icon: ActivityGlyph },
+  { id: 'playlists', label: 'playlists', icon: PlaylistsGlyph },
+  { id: 'downloads', label: 'downloads', icon: DownloadGlyph },
+  { id: 'artists', label: 'artists', icon: UserGlyph },
+  { id: 'activity', label: 'activity', icon: ActivityGlyph },
 ];
 
 export const LibraryScreen: React.FC<LibraryScreenProps> = ({
   mode,
   uid = null,
-  displayName = 'Listener',
+  displayName = 'listener',
   profileImageUrl,
   avatarPreset = 'silhouette',
   isOffline = false,
@@ -295,16 +293,14 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     setLiveAddLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const [realRes, itunesRes, ytRes, audiusRes] = await Promise.allSettled([
+        const [realRes, itunesRes, audiusRes] = await Promise.allSettled([
           searchRealSongs(trimmed, 25),
           searchItunesTracks(trimmed, 20),
-          searchYouTubeTracks(trimmed),
           searchAudiusTracks(trimmed, 12),
         ]);
         if (seq !== liveAddSeqRef.current) return;
         const mergedMap = new Map<string, ShowcaseTrack>();
         const lists = [
-          ytRes.status === 'fulfilled' ? ytRes.value : [],
           realRes.status === 'fulfilled' ? realRes.value : [],
           itunesRes.status === 'fulfilled' ? itunesRes.value : [],
           audiusRes.status === 'fulfilled' ? audiusRes.value : [],
@@ -334,41 +330,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     'Lossless 24-bit' | 'High 320kbps'
   >('Lossless 24-bit');
 
-  const miniBarRef = useRef<HTMLDivElement>(null);
-  const miniTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [miniThumb, setMiniThumb] = useState<{
-    left: number;
-    width: number;
-    ready: boolean;
-  }>({ left: 0, width: 0, ready: false });
-
-  const measureMiniThumb = useCallback(() => {
-    const activeEl = miniTabRefs.current[subTab];
-    if (!activeEl) return;
-    setMiniThumb({
-      left: activeEl.offsetLeft,
-      width: activeEl.offsetWidth,
-      ready: true,
-    });
-  }, [subTab]);
-
-  useLayoutEffect(() => {
-    if (mode !== 'library' || (subTab === 'playlists' && selectedPlaylistId))
-      return;
-    measureMiniThumb();
-    const barEl = miniBarRef.current;
-    if (!barEl) return;
-    const observer = new ResizeObserver(() => measureMiniThumb());
-    observer.observe(barEl);
-    Object.values(miniTabRefs.current).forEach((el) => {
-      if (el) observer.observe(el);
-    });
-    window.addEventListener('resize', measureMiniThumb);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measureMiniThumb);
-    };
-  }, [measureMiniThumb, mode, subTab, selectedPlaylistId]);
+  const activeSubTabIdx = Math.max(
+    0,
+    SUB_TABS.findIndex((t) => t.id === subTab)
+  );
 
   const readImageFile = (
     file: File | undefined,
@@ -388,24 +353,24 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     return (
       <div className="space-y-7 max-w-2xl">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_24px_rgba(255,255,255,0.2)]">
+          <div className="w-16 h-16 rounded-full bg-white text-black border border-[#242429] flex items-center justify-center">
             <UserGlyph className="w-8 h-8" />
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              {displayName}
+              {displayName.toLowerCase()}
             </h1>
-            <p className="text-xs text-white/60 mt-0.5">
-              {playlists.length} Playlists · {favoriteIds.size} Liked ·{' '}
-              {downloadedIds.size} Downloaded · {audioQuality}
+            <p className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+              {playlists.length} playlists · {favoriteIds.size} liked ·{' '}
+              {downloadedIds.size} downloaded · {audioQuality.toLowerCase()}
             </p>
           </div>
         </div>
 
-        <div className="rounded-3xl bg-[#111114] border border-white/20 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/60">
+        <div className="ather-depth-card rounded-3xl p-5 space-y-4">
+          <div className="flex items-center gap-2 text-xs font-extrabold tracking-wider text-[#A1A1AA]">
             <RadioStreamGlyph className="w-4 h-4 text-white" />
-            <span>Streaming Quality</span>
+            <span>streaming quality</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -416,24 +381,24 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   key={tier}
                   type="button"
                   onClick={() => setAudioQuality(tier)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${
+                  className={`p-4 rounded-2xl border text-left transition-colors min-h-[44px] ${
                     active
                       ? 'bg-white text-black border-white'
-                      : 'bg-black border-white/15 text-white/75 hover:border-white/35'
+                      : 'bg-[#141418] text-[#A1A1AA] border-[#242429] hover:text-white'
                   }`}
                 >
-                  <div className="text-sm font-bold flex items-center justify-between">
-                    <span>{tier}</span>
+                  <div className="text-sm font-extrabold flex items-center justify-between">
+                    <span>{tier.toLowerCase()}</span>
                     {active && <HapticsSparkGlyph className="w-4 h-4 text-black" />}
                   </div>
                   <div
-                    className={`text-xs mt-1 ${
-                      active ? 'text-black/65' : 'text-white/75 font-bold'
+                    className={`text-xs font-bold mt-1 ${
+                      active ? 'text-black/75' : 'text-[#A1A1AA]'
                     }`}
                   >
                     {tier === 'Lossless 24-bit'
-                      ? 'Studio ALAC clarity'
-                      : 'Balanced bandwidth streaming'}
+                      ? 'studio alac clarity'
+                      : 'balanced bandwidth streaming'}
                   </div>
                 </button>
               );
@@ -527,9 +492,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     onPickPreset: (style: ArtworkStyle) => void,
     onReset: () => void
   ) => (
-    <div className="rounded-2xl bg-black border border-white/15 p-4 space-y-3">
+    <div className="rounded-2xl bg-[#141418] border border-[#242429] p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-bold text-white">Playlist Cover Photo</span>
+        <span className="text-xs font-extrabold text-white">playlist cover photo</span>
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -544,28 +509,28 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+            className="ather-acid-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
           >
             <ImagePlusGlyph className="w-3.5 h-3.5" />
-            <span>Upload Photo</span>
+            <span>upload photo</span>
           </button>
 
           {(currentImageUrl || currentArtwork) && (
             <button
               type="button"
               onClick={onReset}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-colors"
+              className="ather-depth-pill inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-xs font-bold transition-colors"
             >
               <RotateGlyph className="w-3 h-3" />
-              <span>Reset</span>
+              <span>reset</span>
             </button>
           )}
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <span className="text-[11px] font-medium text-white/75 font-bold">
-          Or select a cover gradient
+        <span className="text-[11px] font-bold text-[#A1A1AA]">
+          or select a cover gradient
         </span>
         <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
           {PLAYLIST_COVER_PRESETS.map((preset) => {
@@ -574,12 +539,12 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <button
                 key={preset}
                 type="button"
-                aria-label={`Use ${preset} cover`}
+                aria-label={`use ${preset.toLowerCase()} cover`}
                 onClick={() => onPickPreset(preset)}
                 className={`relative aspect-square rounded-xl overflow-hidden border transition-all ${
                   selected
                     ? 'border-white ring-2 ring-white scale-95'
-                    : 'border-white/15 hover:border-white/45'
+                    : 'border-[#242429] hover:opacity-90'
                 }`}
               >
                 <ShowcaseArtwork
@@ -588,7 +553,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   className="w-full h-full"
                 />
                 {selected && (
-                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <span className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <CheckGlyph className="w-4 h-4 text-white" />
                   </span>
                 )}
@@ -616,20 +581,20 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     return (
       <div
         key={track.id}
-        className={`flex items-center gap-3.5 px-4 py-3 transition-opacity ${
-          isCurrent ? 'bg-white/[0.07]' : ''
+        className={`ather-depth-row rounded-2xl flex items-center gap-3.5 px-3.5 py-3 transition-opacity ${
+          isCurrent ? 'ring-1 ring-white border-white/60' : ''
         } ${unavailableOffline ? 'opacity-45' : ''}`}
       >
         <button
           type="button"
           onClick={triggerPlay}
-          className="w-12 h-12 rounded-xl overflow-hidden shrink-0"
-          aria-label={`Play ${track.title}`}
+          className="w-12 h-12 rounded-xl overflow-hidden border border-[#242429] shrink-0"
+          aria-label={`play ${track.title.toLowerCase()}`}
         >
           <ShowcaseArtwork
             style={track.artwork}
             coverUrl={track.coverUrl}
-            alt={track.title}
+            alt={track.title.toLowerCase()}
             preferGradientFallback={track.isAudius}
             compact={true}
             className="w-full h-full"
@@ -642,42 +607,44 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
             onClick={triggerPlay}
             className={`block max-w-full text-sm font-bold truncate text-left ${
               isCurrent
-                ? 'text-white underline decoration-white/60 underline-offset-4'
-                : 'text-white'
+                ? 'text-white'
+                : 'text-[#E4E4E7]'
             }`}
           >
-            {track.title}
+            {track.title.toLowerCase()}
           </button>
-          <div className="flex items-center gap-1 text-xs text-white/75 font-bold truncate mt-0.5">
+          <div className="flex items-center gap-1 text-xs text-[#A1A1AA] font-bold truncate mt-0.5">
             <button
               type="button"
               onClick={() => onOpenArtist(track.artist)}
               className="hover:text-white hover:underline truncate transition-colors"
             >
-              {track.artist}
+              {track.artist.toLowerCase()}
             </button>
             <span aria-hidden="true">·</span>
             <span className="truncate">
-              {unavailableOffline ? 'Unavailable offline' : subtitle}
+              {unavailableOffline ? 'unavailable offline' : subtitle.toLowerCase()}
             </span>
           </div>
         </div>
 
         {trailingAction}
 
-        <span className="text-xs tabular-nums text-white/50 w-10 text-right shrink-0">
+        <span className="text-xs tabular-nums text-[#A1A1AA] w-10 text-right shrink-0">
           {formatDuration(track.duration)}
         </span>
 
         <button
           type="button"
-          aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+          aria-label={isCurrent && isPlaying ? 'pause' : 'play'}
           onClick={() => {
             if (isCurrent && isPlaying) onTogglePlay();
             else triggerPlay();
           }}
-          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-            isCurrent ? 'bg-white text-black' : 'bg-white/10 text-white'
+          className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+            isCurrent
+              ? 'bg-white text-black border-white'
+              : 'bg-[#141418] text-white border-[#2A2A32] hover:bg-white hover:text-black'
           }`}
         >
           {isCurrent && isPlaying ? (
@@ -696,37 +663,33 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
   return (
     <div className="space-y-6">
       {!showingPlaylistDetail && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/75 font-bold mb-1">
-              Your Library
+            <p className="text-xs font-extrabold tracking-[0.08em] text-[#A1A1AA] mb-1">
+              your library
             </p>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               {subTab === 'playlists'
-                ? 'Playlists'
+                ? 'playlists'
                 : subTab === 'downloads'
-                ? 'Downloads'
+                ? 'downloads'
                 : subTab === 'artists'
-                ? 'Artists'
-                : 'Activity'}
+                ? 'artists'
+                : 'activity'}
             </h1>
           </div>
 
           <div
-            ref={miniBarRef}
             role="tablist"
-            aria-label="Library sections"
-            className="relative grid grid-cols-4 sm:inline-flex w-full sm:w-auto items-center rounded-full bg-[#111114] border border-white/25 p-1 overflow-hidden"
+            aria-label="library sections"
+            className="ather-depth-bar relative grid grid-cols-4 w-full sm:w-auto sm:min-w-[360px] items-center rounded-full p-1 overflow-hidden"
           >
             <div
               aria-hidden="true"
-              className="absolute top-1 bottom-1 left-0 rounded-full bg-white shadow-sm pointer-events-none"
+              className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/4)] rounded-full bg-white pointer-events-none"
               style={{
-                transform: `translate3d(${miniThumb.left}px, 0, 0)`,
-                width: `${miniThumb.width}px`,
-                opacity: miniThumb.ready ? 1 : 0,
-                transition:
-                  'transform 0.45s cubic-bezier(0.32, 1.28, 0.36, 1), width 0.38s cubic-bezier(0.32, 1.28, 0.36, 1), opacity 0.2s ease',
+                transform: `translate3d(${activeSubTabIdx * 100}%, 0, 0)`,
+                transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             />
 
@@ -736,9 +699,6 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
               return (
                 <button
                   key={tab.id}
-                  ref={(el) => {
-                    miniTabRefs.current[tab.id] = el;
-                  }}
                   role="tab"
                   type="button"
                   aria-selected={active}
@@ -748,8 +708,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       setSelectedPlaylistId(null);
                     }
                   }}
-                  className={`relative z-10 inline-flex items-center justify-center gap-1 sm:gap-1.5 min-w-0 px-1.5 sm:px-3.5 py-2 rounded-full text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition-colors ${
-                    active ? 'text-black' : 'text-white/85 hover:text-white'
+                  className={`relative z-10 inline-flex items-center justify-center gap-1 sm:gap-1.5 min-w-0 min-h-[44px] px-1.5 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition-colors duration-150 ${
+                    active ? 'text-black' : 'text-[#A1A1AA] hover:text-white'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -791,19 +751,19 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             <button
                               type="button"
                               onClick={() => setSelectedPlaylistId(null)}
-                              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#111114] border border-white/15 text-xs font-bold text-white hover:border-white/35 active:scale-95 transition-all"
+                              className="ather-depth-pill inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform"
                             >
                               <ChevronLeftGlyph className="w-4 h-4" />
-                              <span>All Playlists</span>
+                              <span>all playlists</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setEditingMeta(false)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#111114] border border-white/15 text-xs font-bold text-white hover:border-white/35 transition-all"
+                              className="ather-depth-pill inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-extrabold text-white transition-transform active:scale-95"
                             >
                               <CloseGlyph className="w-3.5 h-3.5" />
-                              <span>Cancel Edit</span>
+                              <span>cancel edit</span>
                             </button>
                           </div>
 
@@ -816,16 +776,16 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                               });
                               setEditingMeta(false);
                             }}
-                            className="rounded-3xl bg-[#111114] border border-white/15 p-6 space-y-4"
+                            className="ather-depth-card rounded-3xl p-6 space-y-4"
                           >
                             <div className="flex items-center gap-4">
-                              <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/15 shrink-0">
+                              <div className="w-20 h-20 rounded-2xl overflow-hidden border border-[#242429] shrink-0">
                                 <PlaylistCover
                                   coverImageUrl={activePlaylist.coverImageUrl}
                                   coverArtwork={activePlaylist.coverArtwork}
                                   fallbackArtwork={fallbackArtwork}
                                   fallbackCoverUrl={fallbackCoverUrl}
-                                  alt={activePlaylist.name}
+                                  alt={activePlaylist.name.toLowerCase()}
                                   className="w-full h-full"
                                 />
                               </div>
@@ -834,15 +794,15 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                   type="text"
                                   value={editName}
                                   onChange={(e) => setEditName(e.target.value)}
-                                  placeholder="Playlist Name"
-                                  className="w-full rounded-2xl bg-black border border-white/15 px-4 py-2 text-sm font-bold text-white focus:outline-none focus:border-white"
+                                  placeholder="playlist name"
+                                  className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-white"
                                 />
                                 <input
                                   type="text"
                                   value={editDesc}
                                   onChange={(e) => setEditDesc(e.target.value)}
-                                  placeholder="Optional mood or notes"
-                                  className="w-full rounded-2xl bg-black border border-white/15 px-4 py-2 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                                  placeholder="optional mood or notes"
+                                  className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-4 py-2 text-xs font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                                 />
                               </div>
                             </div>
@@ -872,28 +832,28 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setEditingMeta(false)}
-                                className="px-4 py-2 rounded-full bg-white/10 text-xs font-bold text-white hover:bg-white/20"
+                                className="ather-depth-pill px-4 py-2 rounded-full text-xs font-extrabold text-white"
                               >
-                                Cancel
+                                cancel
                               </button>
                               <button
                                 type="submit"
-                                className="px-5 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90"
+                                className="ather-acid-btn px-5 py-2 rounded-full text-xs font-extrabold"
                               >
-                                Save Changes
+                                save changes
                               </button>
                             </div>
                           </form>
                         </div>
                       ) : (
                         <>
-                          <div className="relative ather-hero-bleed h-[340px] sm:h-[500px] overflow-hidden bg-[#0D0D0F] group">
+                          <div className="relative ather-hero-bleed h-[340px] sm:h-[500px] overflow-hidden bg-[#000000] border-b border-[#242429] group">
                             <PlaylistCover
                               coverImageUrl={activePlaylist.coverImageUrl}
                               coverArtwork={activePlaylist.coverArtwork}
                               fallbackArtwork={fallbackArtwork}
                               fallbackCoverUrl={fallbackCoverUrl}
-                              alt={activePlaylist.name}
+                              alt={activePlaylist.name.toLowerCase()}
                               className="w-full h-full"
                             />
 
@@ -909,21 +869,21 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                   setPlaylistMenuOpen(false);
                                   setSelectedPlaylistId(null);
                                 }}
-                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#111114] border border-white/30 text-xs font-extrabold text-white hover:bg-[#1C1C22] hover:border-white/50 active:scale-95 transition-all"
+                                className="ather-depth-pill inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform"
                               >
                                 <ChevronLeftGlyph className="w-4 h-4" />
-                                <span>All Playlists</span>
+                                <span>all playlists</span>
                               </button>
 
                               <div className="relative">
                                 <button
                                   type="button"
-                                  aria-label="Playlist options"
+                                  aria-label="playlist options"
                                   aria-expanded={playlistMenuOpen}
                                   onClick={() =>
                                     setPlaylistMenuOpen((o) => !o)
                                   }
-                                  className="w-10 h-10 rounded-full bg-[#111114] border border-white/30 text-white flex items-center justify-center hover:bg-[#1C1C22] hover:border-white/50 active:scale-95 transition-all"
+                                  className="ather-depth-btn w-11 h-11 rounded-full text-white flex items-center justify-center active:scale-95 transition-transform"
                                 >
                                   <MoreDotsGlyph className="w-5 h-5" />
                                 </button>
@@ -936,10 +896,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                       className="fixed inset-0 z-20"
                                     />
                                     <div
-                                      style={{
-                                        backgroundColor: '#111114',
-                                      }}
-                                      className="absolute right-0 top-12 z-30 w-52 rounded-2xl border border-white/25 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.95)] space-y-0.5"
+                                      className="ather-depth-card absolute right-0 top-12 z-30 w-52 rounded-2xl p-1.5 space-y-0.5"
                                     >
                                       <button
                                         type="button"
@@ -947,10 +904,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                           setEditingCoverOnly((c) => !c);
                                           setPlaylistMenuOpen(false);
                                         }}
-                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-white hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-white hover:bg-[#141418] flex items-center gap-2.5 transition-colors"
                                       >
-                                        <CameraGlyph className="w-4 h-4 text-white/80 shrink-0" />
-                                        <span>Change Cover</span>
+                                        <CameraGlyph className="w-4 h-4 text-white shrink-0" />
+                                        <span>change cover</span>
                                       </button>
 
                                       <button
@@ -964,10 +921,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                           setPlaylistMenuOpen(false);
                                           setEditingMeta(true);
                                         }}
-                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-white hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-white hover:bg-[#141418] flex items-center gap-2.5 transition-colors"
                                       >
-                                        <EditPenGlyph className="w-4 h-4 text-white/80 shrink-0" />
-                                        <span>Edit Playlist</span>
+                                        <EditPenGlyph className="w-4 h-4 text-white shrink-0" />
+                                        <span>edit playlist</span>
                                       </button>
 
                                       <button
@@ -977,10 +934,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                           onDeletePlaylist(activePlaylist.id);
                                           setSelectedPlaylistId(null);
                                         }}
-                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 transition-colors"
+                                        className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold text-[#E4E4E7] hover:bg-[#141418] hover:text-white flex items-center gap-2.5 transition-colors"
                                       >
-                                        <TrashGlyph className="w-4 h-4 text-white/75 shrink-0" />
-                                        <span>Delete Playlist</span>
+                                        <TrashGlyph className="w-4 h-4 text-[#E4E4E7] shrink-0" />
+                                        <span>delete playlist</span>
                                       </button>
                                     </div>
                                   </>
@@ -990,11 +947,11 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
                             <div className="absolute inset-x-4 sm:inset-x-8 bottom-5 z-20 space-y-2">
                               <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-[1.05] drop-shadow-[0_4px_20px_rgba(0,0,0,0.85)] truncate">
-                                {activePlaylist.name}
+                                {activePlaylist.name.toLowerCase()}
                               </h2>
                               {activePlaylist.description && (
-                                <p className="text-xs sm:text-sm text-white/75 max-w-xl leading-relaxed line-clamp-2">
-                                  {activePlaylist.description}
+                                <p className="text-xs sm:text-sm font-bold text-[#A1A1AA] max-w-xl leading-relaxed line-clamp-2">
+                                  {activePlaylist.description.toLowerCase()}
                                 </p>
                               )}
 
@@ -1003,19 +960,19 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                   displayName={displayName}
                                   imageUrl={profileImageUrl}
                                   preset={avatarPreset}
-                                  className="w-6 h-6 border border-white/25 shrink-0"
+                                  className="w-6 h-6 border border-[#242429] shrink-0"
                                 />
                                 <span className="text-sm font-bold text-white">
-                                  {displayName}
+                                  {displayName.toLowerCase()}
                                 </span>
-                                <span className="text-white/45" aria-hidden="true">
+                                <span className="text-[#A1A1AA]" aria-hidden="true">
                                   ·
                                 </span>
-                                <span className="text-xs font-semibold tabular-nums text-white/65">
-                                  Playlist · {playlistTracks.length}{' '}
+                                <span className="text-xs font-bold tabular-nums text-[#A1A1AA]">
+                                  playlist · {playlistTracks.length}{' '}
                                   {playlistTracks.length === 1 ? 'song' : 'songs'}{' '}
                                   · {formatDuration(totalSeconds)} ·{' '}
-                                  {activePlaylist.updatedAt}
+                                  {activePlaylist.updatedAt.toLowerCase()}
                                 </span>
                               </div>
                             </div>
@@ -1028,21 +985,21 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                 setAddSongQuery('');
                                 setAddingSongsOpen(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border bg-[#111114] text-white border-white/15 hover:border-white/35 active:scale-95 transition-all"
+                              className="ather-depth-pill inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform"
                             >
-                              <PlusGlyph className="w-3.5 h-3.5" />
-                              <span>Add Songs</span>
+                              <PlusGlyph className="w-3.5 h-3.5 text-white" />
+                              <span>add songs</span>
                             </button>
 
                             <div className="flex items-center gap-3 shrink-0">
                               <button
                                 type="button"
-                                aria-label="Shuffle playlist"
+                                aria-label="shuffle playlist"
                                 disabled={playlistTracks.length === 0}
                                 onClick={() =>
                                   onShufflePlay(activePlaylist.trackIds)
                                 }
-                                className="w-11 h-11 rounded-full bg-[#111114] text-white border border-white/15 flex items-center justify-center hover:border-white/35 disabled:opacity-40 transition-transform active:scale-90"
+                                className="ather-depth-btn w-11 h-11 rounded-full text-white flex items-center justify-center disabled:opacity-40 transition-transform active:scale-90"
                               >
                                 <ShuffleGlyph className="w-4 h-4" />
                               </button>
@@ -1051,8 +1008,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                 type="button"
                                 aria-label={
                                   isPlaylistPlaying && isPlaying
-                                    ? 'Pause playlist'
-                                    : 'Play playlist'
+                                    ? 'pause playlist'
+                                    : 'play playlist'
                                 }
                                 disabled={playlistTracks.length === 0}
                                 onClick={() => {
@@ -1069,7 +1026,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                     }
                                   }
                                 }}
-                                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_24px_rgba(255,255,255,0.28)] disabled:opacity-40 hover:scale-105 active:scale-90 transition-transform"
+                                className="ather-acid-btn w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-40 hover:scale-105 active:scale-90 transition-transform"
                               >
                                 {isPlaylistPlaying && isPlaying ? (
                                   <PauseGlyph className="w-6 h-6" />
@@ -1111,11 +1068,11 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       )}
                     </section>
 
-                    <section aria-label="Playlist Songs" className="space-y-3">
+                    <section aria-label="playlist songs" className="space-y-3">
                       {playlistTracks.length === 0 ? (
-                        <div className="rounded-3xl bg-[#111114] border border-white/20 p-8 text-center space-y-3">
-                          <p className="text-xs text-white/75 font-bold">
-                            This playlist has no songs yet.
+                        <div className="ather-depth-card rounded-3xl p-8 text-center space-y-3">
+                          <p className="text-xs text-[#A1A1AA] font-bold">
+                            this playlist has no songs yet.
                           </p>
                           <button
                             type="button"
@@ -1123,25 +1080,29 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                               setAddSongQuery('');
                               setAddingSongsOpen(true);
                             }}
-                            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+                            className="ather-acid-btn inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
                           >
                             <PlusGlyph className="w-3.5 h-3.5" />
-                            <span>Add Songs to Playlist</span>
+                            <span>add songs to playlist</span>
                           </button>
                         </div>
                       ) : (
                         <>
-                          <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/[0.08] overflow-hidden">
+                          <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
                             {playlistTracks.map((track, idx) => {
                               const isCurrent = currentTrack?.id === track.id;
                               return (
                                 <div
                                   key={`${track.id}-${idx}`}
-                                  className={`flex items-center gap-3 px-4 py-3 ${
-                                    isCurrent ? 'bg-white/[0.07]' : ''
+                                  className={`ather-depth-row rounded-2xl flex items-center gap-3 px-3.5 py-3 ${
+                                    isCurrent ? 'ring-1 ring-white border-white/60' : ''
                                   }`}
                                 >
-                                  <span className="w-5 text-xs font-bold tabular-nums text-white/40 text-center shrink-0">
+                                  <span
+                                    className={`w-5 text-xs font-bold tabular-nums text-center shrink-0 ${
+                                      isCurrent ? 'text-white' : 'text-[#A1A1AA]'
+                                    }`}
+                                  >
                                     {idx + 1}
                                   </span>
 
@@ -1158,13 +1119,13 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                         onSelectTrack(track, true);
                                       }
                                     }}
-                                    className="w-11 h-11 rounded-xl overflow-hidden shrink-0"
-                                    aria-label={`Play ${track.title}`}
+                                    className="w-11 h-11 rounded-xl overflow-hidden border border-[#242429] shrink-0"
+                                    aria-label={`play ${track.title.toLowerCase()}`}
                                   >
                                     <ShowcaseArtwork
                                       style={track.artwork}
                                       coverUrl={track.coverUrl}
-                                      alt={track.title}
+                                      alt={track.title.toLowerCase()}
                                       preferGradientFallback={track.isAudius}
                                       compact={true}
                                       className="w-full h-full"
@@ -1185,58 +1146,56 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                           onSelectTrack(track, true);
                                         }
                                       }}
-                                      className={`block max-w-full text-sm font-bold truncate text-left ${
-                                        isCurrent
-                                          ? 'text-white underline decoration-white/60 underline-offset-4'
-                                          : 'text-white'
+                                      className={`block max-w-full text-sm font-extrabold truncate text-left ${
+                                        isCurrent ? 'text-white' : 'text-[#E4E4E7]'
                                       }`}
                                     >
-                                      {track.title}
+                                      {track.title.toLowerCase()}
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => onOpenArtist(track.artist)}
-                                      className="block max-w-full text-xs text-white/75 font-bold hover:text-white hover:underline truncate mt-0.5 text-left"
+                                      className="block max-w-full text-xs text-[#A1A1AA] font-bold hover:text-white hover:underline truncate mt-0.5 text-left"
                                     >
-                                      {track.artist}
+                                      {track.artist.toLowerCase()}
                                     </button>
                                   </div>
 
                                   <div className="flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
-                                      aria-label="Move song up"
+                                      aria-label="move song up"
                                       disabled={idx === 0}
                                       onClick={() =>
                                         handleMoveTrack(activePlaylist, idx, -1)
                                       }
-                                      className="w-8 h-8 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 disabled:opacity-25 transition-colors"
+                                      className="w-8 h-8 rounded-full flex items-center justify-center text-[#A1A1AA] hover:text-white disabled:opacity-25 transition-colors"
                                     >
                                       <ArrowUpGlyph className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       type="button"
-                                      aria-label="Move song down"
+                                      aria-label="move song down"
                                       disabled={
                                         idx === playlistTracks.length - 1
                                       }
                                       onClick={() =>
                                         handleMoveTrack(activePlaylist, idx, 1)
                                       }
-                                      className="w-8 h-8 rounded-full flex items-center justify-center text-white/65 hover:text-white hover:bg-white/10 disabled:opacity-25 transition-colors"
+                                      className="w-8 h-8 rounded-full flex items-center justify-center text-[#A1A1AA] hover:text-white disabled:opacity-25 transition-colors"
                                     >
                                       <ArrowDownGlyph className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       type="button"
-                                      aria-label="Remove song from playlist"
+                                      aria-label="remove song from playlist"
                                       onClick={() =>
                                         handleRemoveTrackFromPlaylist(
                                           activePlaylist,
                                           idx
                                         )
                                       }
-                                      className="w-8 h-8 rounded-full flex items-center justify-center text-white/75 font-bold hover:text-white hover:bg-white/10 transition-colors"
+                                      className="w-8 h-8 rounded-full flex items-center justify-center text-[#A1A1AA] hover:text-white transition-colors"
                                     >
                                       <TrashGlyph className="w-3.5 h-3.5" />
                                     </button>
@@ -1252,10 +1211,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                               setAddSongQuery('');
                               setAddingSongsOpen(true);
                             }}
-                            className="w-full py-3 rounded-2xl bg-[#111114] border border-dashed border-white/20 hover:border-white/45 text-xs font-bold text-white/80 hover:text-white inline-flex items-center justify-center gap-2 transition-colors"
+                            className="ather-depth-row w-full py-3 rounded-2xl text-xs font-extrabold text-white inline-flex items-center justify-center gap-2 transition-colors"
                           >
-                            <PlusGlyph className="w-4 h-4" />
-                            <span>Add more songs to this playlist</span>
+                            <PlusGlyph className="w-4 h-4 text-white" />
+                            <span>add more songs to this playlist</span>
                           </button>
                         </>
                       )}
@@ -1265,42 +1224,42 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     {addingSongsOpen && (
                       <PopupSheet
                         onClose={() => setAddingSongsOpen(false)}
-                        ariaLabel={`Add Songs to ${activePlaylist.name}`}
+                        ariaLabel={`add songs to ${activePlaylist.name.toLowerCase()}`}
                         variant="bottom"
                         maxWidthClass="max-w-lg"
                         maxHeightClass="max-h-[85dvh]"
                       >
-                        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-white/10 shrink-0">
+                        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-[#242429] shrink-0">
                           <div className="min-w-0">
                             <h4 className="text-base font-extrabold text-white truncate">
-                              Add Songs to “{activePlaylist.name}”
+                              add songs to “{activePlaylist.name.toLowerCase()}”
                             </h4>
-                            <p className="text-xs text-white/75 font-bold mt-0.5">
-                              Search live songs and tap + to add to your playlist
+                            <p className="text-xs text-[#A1A1AA] font-bold mt-0.5">
+                              search live songs and tap + to add to your playlist
                             </p>
                           </div>
                           <button
                             type="button"
                             onClick={() => setAddingSongsOpen(false)}
-                            className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 shrink-0 transition-colors"
+                            className="ather-acid-btn px-4 py-1.5 rounded-full text-xs font-extrabold shrink-0 transition-transform active:scale-95"
                           >
-                            Done
+                            done
                           </button>
                         </div>
 
                         <div className="p-4 space-y-3 flex-1 min-h-0 flex flex-col">
                           <div className="relative shrink-0">
-                            <SearchInputGlyph className="w-4 h-4 text-white/45 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <SearchInputGlyph className="w-4 h-4 text-[#A1A1AA] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                               type="search"
                               value={addSongQuery}
                               onChange={(e) => setAddSongQuery(e.target.value)}
-                              placeholder="Search any song or artist..."
-                              className="w-full rounded-full bg-black/80 border border-white/15 pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white"
+                              placeholder="search any song or artist..."
+                              className="w-full rounded-full bg-[#141418] border border-[#242429] pl-10 pr-4 py-2.5 text-xs font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                             />
                           </div>
 
-                          <div className="divide-y divide-white/[0.08] rounded-2xl bg-black/70 border border-white/10 flex-1 min-h-0 overflow-y-auto no-scrollbar">
+                          <div className="rounded-2xl bg-[#141418] border border-[#242429] p-1.5 space-y-1 flex-1 min-h-0 overflow-y-auto no-scrollbar">
                             {liveAddLoading && addableTracksPool.length === 0 ? (
                               <div className="p-4 space-y-3">
                                 {Array.from({ length: 4 }).map((_, i) => (
@@ -1308,19 +1267,19 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                     key={`add-skel-${i}`}
                                     className="flex items-center gap-3 animate-pulse"
                                   >
-                                    <div className="w-10 h-10 rounded-lg bg-[#0E0E10]" />
+                                    <div className="w-10 h-10 rounded-lg bg-[#242429]" />
                                     <div className="flex-1 space-y-1.5">
-                                      <div className="h-3 w-36 rounded bg-[#0E0E10]" />
-                                      <div className="h-2.5 w-24 rounded bg-[#0E0E10]" />
+                                      <div className="h-3 w-36 rounded bg-[#242429]" />
+                                      <div className="h-2.5 w-24 rounded bg-[#242429]" />
                                     </div>
                                   </div>
                                 ))}
                               </div>
                             ) : addableTracksPool.length === 0 ? (
-                              <div className="p-8 text-center text-xs text-white/50">
+                              <div className="p-8 text-center text-xs font-bold text-[#A1A1AA]">
                                 {addSongQuery.trim()
-                                  ? `No songs matched “${addSongQuery.trim()}”.`
-                                  : 'Browse or search songs online to build your library.'}
+                                  ? `no songs matched “${addSongQuery.trim().toLowerCase()}”.`
+                                  : 'browse or search songs online to build your library.'}
                               </div>
                             ) : (
                               addableTracksPool.map((track) => {
@@ -1337,13 +1296,13 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                         track
                                       )
                                     }
-                                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-white/[0.05] transition-colors"
+                                    className="ather-depth-row rounded-xl w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
                                   >
-                                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/10">
+                                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-[#242429]">
                                       <ShowcaseArtwork
                                         style={track.artwork}
                                         coverUrl={track.coverUrl}
-                                        alt={track.title}
+                                        alt={track.title.toLowerCase()}
                                         preferGradientFallback={track.isAudius}
                                         compact={true}
                                         className="w-full h-full"
@@ -1351,17 +1310,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="text-xs font-bold text-white truncate">
-                                        {track.title}
+                                        {track.title.toLowerCase()}
                                       </div>
-                                      <div className="text-[11px] text-white/75 font-bold truncate">
-                                        {track.artist} · {track.album}
+                                      <div className="text-[11px] text-[#A1A1AA] font-bold truncate">
+                                        {track.artist.toLowerCase()} · {track.album.toLowerCase()}
                                       </div>
                                     </div>
                                     <span
                                       className={`w-8 h-8 rounded-full flex items-center justify-center border shrink-0 transition-colors ${
                                         included
                                           ? 'bg-white text-black border-white'
-                                          : 'border-white/25 text-white/75 hover:border-white'
+                                          : 'bg-[#141418] text-white border-[#242429]'
                                       }`}
                                     >
                                       {included ? (
@@ -1395,17 +1354,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
               return (
                 <div className="space-y-6">
                   <section className="space-y-5">
-                    <div className="relative ather-hero-bleed h-[320px] sm:h-[420px] overflow-hidden bg-[#0D0D0F]">
+                    <div className="relative ather-hero-bleed h-[320px] sm:h-[420px] overflow-hidden bg-[#000000] border-b border-[#242429]">
                       {likedTracks[0]?.coverUrl ? (
                         <ShowcaseArtwork
                           style={likedTracks[0].artwork}
                           coverUrl={likedTracks[0].coverUrl}
-                          alt="Liked Songs"
+                          alt="liked songs"
                           className="w-full h-full opacity-55"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-[#232328] via-[#121215] to-black flex items-center justify-center">
-                          <HeartGlyph className="w-24 h-24 text-white/25" active={true} />
+                        <div className="w-full h-full bg-gradient-to-br from-[#141418] via-[#0D0D10] to-[#000000] flex items-center justify-center">
+                          <HeartGlyph className="w-24 h-24 text-white/30" active={true} />
                         </div>
                       )}
 
@@ -1418,23 +1377,23 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         <button
                           type="button"
                           onClick={() => setSelectedPlaylistId(null)}
-                          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#111114] border border-white/30 text-xs font-extrabold text-white hover:bg-[#1C1C22] hover:border-white/50 active:scale-95 transition-all"
+                          className="ather-depth-pill inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-extrabold text-white active:scale-95 transition-transform"
                         >
                           <ChevronLeftGlyph className="w-4 h-4" />
-                          <span>All Playlists</span>
+                          <span>all playlists</span>
                         </button>
                       </div>
 
                       <div className="absolute inset-x-4 sm:inset-x-8 bottom-5 z-20 space-y-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-black text-[11px] font-extrabold uppercase tracking-wider">
-                          <HeartGlyph className="w-3.5 h-3.5" active={true} />
-                          <span>Smart Playlist</span>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-[#A1A1AA]">
+                          <HeartGlyph className="w-3.5 h-3.5 text-white" active={true} />
+                          <span>saved collection</span>
                         </div>
                         <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-[1.05]">
-                          Liked Songs
+                          liked songs
                         </h2>
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold tabular-nums text-white/65">
-                          <span>{displayName}</span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-bold tabular-nums text-[#A1A1AA]">
+                          <span>{displayName.toLowerCase()}</span>
                           <span aria-hidden="true">·</span>
                           <span>
                             {likedTracks.length}{' '}
@@ -1453,12 +1412,12 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     <div className="flex items-center justify-end gap-3">
                       <button
                         type="button"
-                        aria-label="Shuffle Liked Songs"
+                        aria-label="shuffle liked songs"
                         disabled={likedTracks.length === 0}
                         onClick={() =>
                           onShufflePlay(likedTracks.map((t) => t.id))
                         }
-                        className="w-11 h-11 rounded-full bg-[#111114] text-white border border-white/15 flex items-center justify-center hover:border-white/35 disabled:opacity-40 transition-transform active:scale-90"
+                        className="ather-depth-btn w-11 h-11 rounded-full text-white flex items-center justify-center disabled:opacity-40 transition-transform active:scale-90"
                       >
                         <ShuffleGlyph className="w-4 h-4" />
                       </button>
@@ -1467,8 +1426,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         type="button"
                         aria-label={
                           isLikedPlaying && isPlaying
-                            ? 'Pause Liked Songs'
-                            : 'Play Liked Songs'
+                            ? 'pause liked songs'
+                            : 'play liked songs'
                         }
                         disabled={likedTracks.length === 0}
                         onClick={() => {
@@ -1485,7 +1444,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             }
                           }
                         }}
-                        className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_24px_rgba(255,255,255,0.28)] disabled:opacity-40 hover:scale-105 active:scale-90 transition-transform"
+                        className="ather-acid-btn w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-40 hover:scale-105 active:scale-90 transition-transform"
                       >
                         {isLikedPlaying && isPlaying ? (
                           <PauseGlyph className="w-6 h-6" />
@@ -1496,27 +1455,27 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     </div>
                   </section>
 
-                  <section aria-label="Liked Songs List">
+                  <section aria-label="liked songs list">
                     {likedTracks.length === 0 ? (
-                      <div className="rounded-3xl bg-[#111114] border border-white/20 p-8 text-center space-y-2">
-                        <p className="text-sm font-bold text-white">
-                          No liked songs yet
+                      <div className="ather-depth-card rounded-3xl p-8 text-center space-y-2">
+                        <p className="text-sm font-extrabold text-white">
+                          no liked songs yet
                         </p>
-                        <p className="text-xs text-white/75 font-bold">
-                          Tap the heart icon on any song while listening to save it here.
+                        <p className="text-xs text-[#A1A1AA] font-bold">
+                          tap the heart icon on any song while listening to save it here.
                         </p>
                       </div>
                     ) : (
-                      <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/[0.08] overflow-hidden">
+                      <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
                         {likedTracks.map((track, idx) =>
                           renderTrackRow(
                             track,
                             track.album,
                             <button
                               type="button"
-                              aria-label={`Remove ${track.title} from Liked Songs`}
+                              aria-label={`remove ${track.title.toLowerCase()} from liked songs`}
                               onClick={() => onToggleFavorite(track.id)}
-                              className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-colors shrink-0"
+                              className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 shrink-0"
                             >
                               <HeartGlyph className="w-4 h-4" active={true} />
                             </button>,
@@ -1542,7 +1501,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
           ) : (
             <div className="space-y-5">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-white/75 font-bold tabular-nums">
+                <span className="text-xs text-[#A1A1AA] font-bold tabular-nums">
                   {playlists.length}{' '}
                   {playlists.length === 1 ? 'playlist' : 'playlists'}
                 </span>
@@ -1556,17 +1515,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     setNewCoverImageUrl(undefined);
                     setCreatingPlaylist((c) => !c);
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all"
+                  className="ather-acid-btn inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-transform"
                 >
                   {creatingPlaylist ? (
                     <>
                       <CloseGlyph className="w-3.5 h-3.5" />
-                      <span>Close</span>
+                      <span>close</span>
                     </>
                   ) : (
                     <>
                       <PlusGlyph className="w-3.5 h-3.5" />
-                      <span>New Playlist</span>
+                      <span>new playlist</span>
                     </>
                   )}
                 </button>
@@ -1577,8 +1536,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   onSubmit={(e) => {
                     e.preventDefault();
                     const created = onCreatePlaylist(
-                      newName.trim() || `Custom Mix #${playlists.length + 1}`,
-                      newDesc.trim() || 'Personal curated rotation',
+                      newName.trim() || `custom mix #${playlists.length + 1}`,
+                      newDesc.trim() || 'personal curated rotation',
                       newTrackIds,
                       {
                         coverArtwork: newCoverArtwork,
@@ -1588,14 +1547,14 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     setCreatingPlaylist(false);
                     handleOpenPlaylist(created);
                   }}
-                  className="rounded-3xl bg-[#111114] border border-white/20 p-5 space-y-4 shadow-2xl"
+                  className="ather-depth-card rounded-3xl p-5 space-y-4"
                 >
                   <div className="text-sm font-extrabold text-white">
-                    Make a New Playlist
+                    make a new playlist
                   </div>
 
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/15 shrink-0">
+                    <div className="w-16 h-16 rounded-2xl overflow-hidden border border-[#242429] shrink-0">
                       <PlaylistCover
                         coverImageUrl={newCoverImageUrl}
                         coverArtwork={newCoverArtwork}
@@ -1603,7 +1562,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           findTrack(newTrackIds[0])?.artwork ?? 'lime-noir'
                         }
                         fallbackCoverUrl={findTrack(newTrackIds[0])?.coverUrl}
-                        alt={newName || 'New playlist cover'}
+                        alt={(newName || 'new playlist cover').toLowerCase()}
                         compact={true}
                         className="w-full h-full"
                       />
@@ -1613,15 +1572,15 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         type="text"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        placeholder="Playlist name"
-                        className="w-full rounded-2xl bg-black border border-white/15 px-3.5 py-2.5 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                        placeholder="playlist name"
+                        className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-3.5 py-2.5 text-sm font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                       />
                       <input
                         type="text"
                         value={newDesc}
                         onChange={(e) => setNewDesc(e.target.value)}
-                        placeholder="Optional description"
-                        className="w-full rounded-2xl bg-black border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white"
+                        placeholder="optional description"
+                        className="w-full rounded-2xl bg-[#141418] border border-[#242429] px-3.5 py-2.5 text-sm font-bold text-white placeholder:text-[#A1A1AA] focus:outline-none focus:ring-2 focus:ring-white"
                       />
                     </div>
                   </div>
@@ -1646,10 +1605,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
                   {allTracks.length > 0 && (
                     <div className="space-y-2">
-                      <span className="text-xs font-semibold text-white/60">
-                        Pick Tracks ({newTrackIds.length} selected)
+                      <span className="text-xs font-bold text-[#A1A1AA]">
+                        pick tracks ({newTrackIds.length} selected)
                       </span>
-                      <div className="divide-y divide-white/[0.08] rounded-2xl bg-black border border-white/10 max-h-52 overflow-y-auto no-scrollbar">
+                      <div className="rounded-2xl bg-[#141418] border border-[#242429] p-1.5 space-y-1 max-h-52 overflow-y-auto no-scrollbar">
                         {allTracks.slice(0, 40).map((track) => {
                           const checked = newTrackIds.includes(track.id);
                           return (
@@ -1663,13 +1622,13 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                     : [...prev, track.id]
                                 )
                               }
-                              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-white/[0.05]"
+                              className="ather-depth-row rounded-xl w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
                             >
-                              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0">
+                              <div className="w-9 h-9 rounded-lg overflow-hidden border border-[#242429] shrink-0">
                                 <ShowcaseArtwork
                                   style={track.artwork}
                                   coverUrl={track.coverUrl}
-                                  alt={track.title}
+                                  alt={track.title.toLowerCase()}
                                   preferGradientFallback={track.isAudius}
                                   compact={true}
                                   className="w-full h-full"
@@ -1677,17 +1636,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-xs font-bold text-white truncate">
-                                  {track.title}
+                                  {track.title.toLowerCase()}
                                 </div>
-                                <div className="text-[11px] text-white/75 font-bold truncate">
-                                  {track.artist}
+                                <div className="text-[11px] text-[#A1A1AA] font-bold truncate">
+                                  {track.artist.toLowerCase()}
                                 </div>
                               </div>
                               <span
                                 className={`w-6 h-6 rounded-full flex items-center justify-center border ${
                                   checked
                                     ? 'bg-white text-black border-white'
-                                    : 'border-white/25 text-white/50'
+                                    : 'bg-[#141418] text-[#A1A1AA] border-[#242429]'
                                 }`}
                               >
                                 {checked ? (
@@ -1707,26 +1666,26 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setCreatingPlaylist(false)}
-                      className="px-4 py-2 rounded-full bg-white/10 text-xs font-bold text-white hover:bg-white/20"
+                      className="ather-depth-pill px-4 py-2 rounded-full text-xs font-bold text-white"
                     >
-                      Cancel
+                      cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90"
+                      className="ather-acid-btn px-5 py-2 rounded-full text-xs font-extrabold"
                     >
-                      Create Playlist
+                      create playlist
                     </button>
                   </div>
                 </form>
               )}
 
-              {/* Pinned Liked Songs Smart Playlist */}
+              {/* Liked Songs */}
               <div
-                className={`rounded-3xl bg-[#111114] border p-4 flex items-center gap-4 transition-colors ${
+                className={`ather-depth-card rounded-3xl p-4 flex items-center gap-4 transition-colors ${
                   currentTrack && favoriteIds.has(currentTrack.id)
-                    ? 'border-white'
-                    : 'border-white/20 hover:border-white/30'
+                    ? 'ring-1 ring-white border-white/60'
+                    : ''
                 }`}
               >
                 <button
@@ -1734,21 +1693,18 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   onClick={() => setSelectedPlaylistId('__liked__')}
                   className="flex items-center gap-4 min-w-0 flex-1 text-left"
                 >
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 bg-white text-black flex items-center justify-center border border-white/20">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 bg-white text-black flex items-center justify-center border border-[#242429]">
                     <HeartGlyph className="w-7 h-7" active={true} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-base font-extrabold text-white truncate">
-                        Liked Songs
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-white/12 text-[10px] font-bold uppercase tracking-wider text-white/75 shrink-0">
-                        Pinned
+                        liked songs
                       </span>
                     </div>
-                    <div className="text-xs text-white/75 font-bold truncate mt-0.5 tabular-nums">
+                    <div className="text-xs text-[#A1A1AA] font-bold truncate mt-0.5 tabular-nums">
                       {likedTracks.length}{' '}
-                      {likedTracks.length === 1 ? 'song' : 'songs'} · Saved favorites
+                      {likedTracks.length === 1 ? 'song' : 'songs'} · saved favorites
                     </div>
                   </div>
                 </button>
@@ -1756,7 +1712,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 {likedTracks.length > 0 && (
                   <button
                     type="button"
-                    aria-label="Play Liked Songs"
+                    aria-label="play liked songs"
                     onClick={() => {
                       if (onSelectPlaylistTrack) {
                         onSelectPlaylistTrack(likedTracks, 0, 'liked-songs');
@@ -1764,7 +1720,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         onSelectTrack(likedTracks[0], true);
                       }
                     }}
-                    className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                    className="ather-acid-btn w-11 h-11 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0"
                   >
                     <PlayGlyph className="w-4 h-4 translate-x-[0.5px]" />
                   </button>
@@ -1772,17 +1728,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
                 <button
                   type="button"
-                  aria-label="Open Liked Songs"
+                  aria-label="open liked songs"
                   onClick={() => setSelectedPlaylistId('__liked__')}
-                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
+                  className="ather-depth-btn w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors shrink-0"
                 >
                   <ChevronRightGlyph className="w-4 h-4" />
                 </button>
               </div>
 
               {playlists.length === 0 ? (
-                <div className="rounded-3xl bg-[#111114] border border-white/20 p-8 text-center text-xs text-white/75 font-bold">
-                  You don’t have any custom playlists yet. Tap “New Playlist” to build one, or tap “+” while browsing songs.
+                <div className="ather-depth-card rounded-3xl p-8 text-center text-xs text-[#A1A1AA] font-bold">
+                  you don’t have any custom playlists yet. tap “new playlist” to build one, or tap “+” while browsing songs.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1795,10 +1751,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     return (
                       <div
                         key={pl.id}
-                        className={`group rounded-3xl bg-[#111114] border p-4 flex items-center gap-4 transition-colors ${
-                          isPlPlaying
-                            ? 'border-white'
-                            : 'border-white/20 hover:border-white/30'
+                        className={`group ather-depth-card rounded-3xl p-4 flex items-center gap-4 transition-colors ${
+                          isPlPlaying ? 'ring-1 ring-white border-white/60' : ''
                         }`}
                       >
                         <button
@@ -1806,7 +1760,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           onClick={() => handleOpenPlaylist(pl)}
                           className="flex items-center gap-4 min-w-0 flex-1 text-left"
                         >
-                          <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-white/10">
+                          <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-[#242429]">
                             <PlaylistCover
                               coverImageUrl={pl.coverImageUrl}
                               coverArtwork={pl.coverArtwork}
@@ -1814,23 +1768,23 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                                 firstTrack?.artwork ?? 'lime-noir'
                               }
                               fallbackCoverUrl={firstTrack?.coverUrl}
-                              alt={pl.name}
+                              alt={pl.name.toLowerCase()}
                               compact={true}
                               className="w-full h-full"
                             />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-base font-extrabold text-white truncate">
-                              {pl.name}
+                              {pl.name.toLowerCase()}
                             </div>
-                            <div className="text-xs text-white/75 font-bold truncate mt-0.5">
+                            <div className="text-xs text-[#A1A1AA] font-bold truncate mt-0.5">
                               {pl.trackIds.length}{' '}
                               {pl.trackIds.length === 1 ? 'song' : 'songs'} ·{' '}
-                              {pl.updatedAt}
+                              {pl.updatedAt.toLowerCase()}
                             </div>
                             {pl.description && (
-                              <div className="text-[11px] text-white/40 truncate mt-0.5">
-                                {pl.description}
+                              <div className="text-[11px] text-[#A1A1AA] truncate mt-0.5">
+                                {pl.description.toLowerCase()}
                               </div>
                             )}
                           </div>
@@ -1838,9 +1792,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
                         <button
                           type="button"
-                          aria-label={`Edit ${pl.name}`}
+                          aria-label={`edit ${pl.name.toLowerCase()}`}
                           onClick={() => handleOpenPlaylist(pl)}
-                          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
+                          className="ather-depth-btn w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors shrink-0"
                         >
                           <ChevronRightGlyph className="w-4 h-4" />
                         </button>
@@ -1858,17 +1812,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
       {subTab === 'downloads' && (
         <div className="space-y-6">
           {isOffline && (
-            <div className="rounded-3xl bg-[#111114] border border-white/15 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="ather-depth-card rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shrink-0">
+                <span className="w-10 h-10 rounded-full bg-white text-black border border-white flex items-center justify-center shrink-0">
                   <WifiOffGlyph className="w-5 h-5" />
                 </span>
                 <div className="min-w-0">
                   <div className="text-sm font-extrabold text-white">
-                    Offline Mode Active
+                    offline mode active
                   </div>
-                  <p className="text-xs text-white/60 mt-0.5">
-                    Switched automatically to your saved downloads.
+                  <p className="text-xs font-bold text-[#A1A1AA] mt-0.5">
+                    switched automatically to your saved downloads.
                   </p>
                 </div>
               </div>
@@ -1879,10 +1833,10 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   onClick={() =>
                     onShufflePlay(downloadedTracks.map((t) => t.id))
                   }
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-xs font-extrabold hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                  className="ather-acid-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold active:scale-95 transition-all shrink-0"
                 >
                   <ShuffleGlyph className="w-3.5 h-3.5" />
-                  <span>Play Downloads</span>
+                  <span>play downloads</span>
                 </button>
               )}
             </div>
@@ -1890,9 +1844,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
                 <DownloadGlyph className="w-4 h-4 text-white" />
-                <span>Saved Offline ({downloadedTracks.length})</span>
+                <span>saved offline ({downloadedTracks.length})</span>
               </h2>
               {!isOffline && downloadedTracks.length > 0 && (
                 <button
@@ -1900,31 +1854,31 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   onClick={() =>
                     onShufflePlay(downloadedTracks.map((t) => t.id))
                   }
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#111114] border border-white/15 text-xs font-bold text-white hover:border-white/40 transition-colors"
+                  className="ather-depth-pill inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-white transition-colors"
                 >
                   <ShuffleGlyph className="w-3.5 h-3.5" />
-                  <span>Shuffle</span>
+                  <span>shuffle</span>
                 </button>
               )}
             </div>
 
             {downloadedTracks.length === 0 ? (
-              <div className="rounded-3xl bg-[#111114] border border-white/20 p-7 text-center text-xs text-white/75 font-bold">
+              <div className="ather-depth-card rounded-3xl p-7 text-center text-xs text-[#A1A1AA] font-bold">
                 {isOffline
-                  ? 'No songs are downloaded yet. Reconnect to the internet to save tracks for offline playback.'
-                  : 'No downloaded songs yet. Save tracks below or from the player’s three-dots menu.'}
+                  ? 'no songs are downloaded yet. reconnect to the internet to save tracks for offline playback.'
+                  : 'no downloaded songs yet. save tracks below or from the player’s three-dots menu.'}
               </div>
             ) : (
-              <div className="rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/[0.08] overflow-hidden">
+              <div className="ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden">
                 {downloadedTracks.map((track, idx) =>
                   renderTrackRow(
                     track,
-                    'Offline',
+                    'offline',
                     <button
                       type="button"
-                      aria-label="Remove download"
+                      aria-label="remove download"
                       onClick={() => void onToggleDownload(track)}
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-colors shrink-0"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-[#141418] transition-colors shrink-0"
                     >
                       <CheckGlyph className="w-4 h-4" />
                     </button>,
@@ -1943,13 +1897,13 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
           {catalogToDownload.length > 0 && (
             <section className="space-y-3">
-              <h3 className="text-sm font-bold text-white/75">
+              <h3 className="text-sm font-extrabold text-[#A1A1AA]">
                 {isOffline
-                  ? 'Connect to Internet to Download More'
-                  : 'Available to Download'}
+                  ? 'connect to internet to download more'
+                  : 'available to download'}
               </h3>
               <div
-                className={`rounded-3xl bg-[#111114] border border-white/20 divide-y divide-white/[0.08] overflow-hidden ${
+                className={`ather-depth-card rounded-3xl p-2 space-y-1.5 overflow-hidden ${
                   isOffline ? 'opacity-50 pointer-events-none' : ''
                 }`}
               >
@@ -1960,9 +1914,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     <button
                       type="button"
                       disabled={isOffline}
-                      aria-label={`Download ${track.title}`}
+                      aria-label={`download ${track.title.toLowerCase()}`}
                       onClick={() => void onToggleDownload(track)}
-                      className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+                      className="ather-depth-btn w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors shrink-0"
                     >
                       <DownloadGlyph className="w-4 h-4" />
                     </button>
@@ -1977,48 +1931,48 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
       {/* TAB 3: ACTIVITY */}
       {subTab === 'activity' && (
         <div className="space-y-5">
-          {/* 1. Spotify-Style Top 10 Most Streamed Artists */}
+          {/* 1. Top 10 Most Streamed Artists */}
           <TopStreamedArtistsSection uid={uid} onSelectArtist={onOpenArtist} />
 
           {/* 2. Listening Activity (Minutes Listened & Streak) */}
-          <section className="rounded-2xl border border-white/20 bg-[#111114] p-4">
+          <section className="ather-depth-card rounded-3xl p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-extrabold tracking-tight text-white">
-                Listening Activity
+                listening activity
               </h3>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-                Live Stats
+              <span className="text-[11px] font-extrabold tracking-wider text-white">
+                live stats
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2.5">
-              <div className="rounded-xl border border-white/20 bg-[#08080A] p-3.5">
+              <div className="ather-depth-row rounded-2xl p-3.5">
                 <div className="text-xl sm:text-2xl font-black text-white tabular-nums">
                   {Math.round(activityStats.totalMinutesListened)}
                 </div>
-                <div className="text-[11px] font-bold text-white/75 mt-0.5">
-                  Minutes Listened
+                <div className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">
+                  minutes listened
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/20 bg-[#08080A] p-3.5">
+              <div className="ather-depth-row rounded-2xl p-3.5">
                 <div className="text-xl sm:text-2xl font-black text-white tabular-nums">
                   {activityStats.streakDays}
                 </div>
-                <div className="text-[11px] font-bold text-white/75 mt-0.5">
-                  {activityStats.streakDays === 1 ? 'Day Streak' : 'Days Streak'}
+                <div className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">
+                  {activityStats.streakDays === 1 ? 'day streak' : 'days streak'}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/20 bg-[#08080A] p-3.5">
+              <div className="ather-depth-row rounded-2xl p-3.5">
                 <div className="text-xl sm:text-2xl font-black text-white tabular-nums">
                   {Object.values(activityStats.songs || {}).reduce(
                     (acc, s) => acc + (s.playCount || 0),
                     0
                   )}
                 </div>
-                <div className="text-[11px] font-bold text-white/75 mt-0.5">
-                  Full Streams
+                <div className="text-[11px] font-bold text-[#A1A1AA] mt-0.5">
+                  full streams
                 </div>
               </div>
             </div>
@@ -2028,22 +1982,22 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {(() => {
             const topSongs = getTop5StreamedSongs(activityStats);
             return (
-              <section className="rounded-2xl border border-white/20 bg-[#111114] p-4">
+              <section className="ather-depth-card rounded-3xl p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-base font-extrabold tracking-tight text-white">
-                    Top 5 Songs
+                    top 5 songs
                   </h3>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-                    Most Played
+                  <span className="text-[11px] font-extrabold tracking-wider text-[#A1A1AA]">
+                    most played
                   </span>
                 </div>
 
                 {topSongs.length === 0 ? (
-                  <p className="text-xs font-bold text-white/75 py-1">
-                    Stream songs for 25 seconds or more to populate your Top 5 tracks.
+                  <p className="text-xs font-bold text-[#A1A1AA] py-1">
+                    stream songs for 25 seconds or more to populate your top 5 tracks.
                   </p>
                 ) : (
-                  <div className="flex flex-col divide-y divide-white/10">
+                  <div className="flex flex-col space-y-1.5">
                     {topSongs.map((entry, idx) => {
                       const liveTrack =
                         (resolveTrack ? resolveTrack(entry.trackId) : undefined) ??
@@ -2063,30 +2017,38 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             transition:
                               'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease',
                           }}
-                          className={`flex items-center gap-3.5 py-2.5 px-1.5 -mx-1.5 rounded-xl text-left hover:bg-white/[0.05] active:scale-[0.98] ${
-                            active ? 'bg-white/[0.08]' : ''
+                          className={`ather-depth-row flex items-center gap-3.5 py-2.5 px-3 rounded-2xl text-left active:scale-[0.98] ${
+                            active ? 'ring-1 ring-white border-white/60' : ''
                           }`}
                         >
-                          <span className="w-5 text-center text-xs font-extrabold tabular-nums text-white/75">
+                          <span
+                            className={`w-5 text-center text-xs font-extrabold tabular-nums ${
+                              active ? 'text-white' : 'text-[#A1A1AA]'
+                            }`}
+                          >
                             {idx + 1}
                           </span>
 
-                          <div className="h-11 w-11 shrink-0 rounded-xl overflow-hidden bg-white/[0.08]">
+                          <div className="h-11 w-11 shrink-0 rounded-xl overflow-hidden border border-[#242429] bg-[#141418]">
                             <ShowcaseArtwork
                               style={liveTrack?.artwork ?? 'obsidian-grid'}
                               coverUrl={entry.coverUrl || entry.artwork || liveTrack?.coverUrl}
-                              alt={entry.title}
+                              alt={entry.title.toLowerCase()}
                               compact={true}
                               className="w-full h-full"
                             />
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-extrabold text-white">
-                              {entry.title}
+                            <p
+                              className={`truncate text-sm font-extrabold ${
+                                active ? 'text-white' : 'text-[#E4E4E7]'
+                              }`}
+                            >
+                              {entry.title.toLowerCase()}
                             </p>
-                            <p className="mt-0.5 truncate text-xs font-bold text-white/75 tabular-nums">
-                              {entry.artist} • {entry.playCount}{' '}
+                            <p className="mt-0.5 truncate text-xs font-bold text-[#A1A1AA] tabular-nums">
+                              {entry.artist.toLowerCase()} • {entry.playCount}{' '}
                               {entry.playCount === 1 ? 'stream' : 'streams'}
                             </p>
                           </div>
@@ -2105,12 +2067,12 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
       {subTab === 'artists' && (
         <div className="space-y-4">
           {followedArtists.length === 0 ? (
-            <div className="rounded-3xl bg-[#111114] border border-white/20 p-8 text-center space-y-2">
+            <div className="ather-depth-card rounded-3xl p-8 text-center space-y-2">
               <div className="text-sm font-extrabold text-white">
-                No followed artists yet
+                no followed artists yet
               </div>
-              <p className="text-xs text-white/75 font-bold">
-                Tap Follow on any artist profile or select artists during onboarding to keep them here.
+              <p className="text-xs text-[#A1A1AA] font-bold">
+                tap follow on any artist profile or select artists during onboarding to keep them here.
               </p>
             </div>
           ) : (
@@ -2126,24 +2088,24 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 return (
                   <div
                     key={artistName}
-                    className="group rounded-3xl bg-[#111114] border border-white/20 hover:border-white/30 p-4 flex flex-col items-center text-center gap-3 transition-colors"
+                    className="group ather-depth-card rounded-3xl p-4 flex flex-col items-center text-center gap-3 transition-colors"
                   >
                     <button
                       type="button"
                       onClick={() => onOpenArtist(artistName)}
                       className="flex flex-col items-center gap-2.5 w-full active:scale-95 transition-transform"
                     >
-                      <div className="w-24 h-24 rounded-full overflow-hidden border border-white/15 group-hover:scale-105 transition-transform">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border border-[#242429] group-hover:scale-105 transition-transform">
                         <ShowcaseArtwork
                           style={pickGradientArtwork(artistName)}
                           coverUrl={photo}
-                          alt={artistName}
+                          alt={artistName.toLowerCase()}
                           compact={true}
                           className="w-full h-full"
                         />
                       </div>
                       <span className="w-full text-sm font-extrabold text-white truncate">
-                        {artistName}
+                        {artistName.toLowerCase()}
                       </span>
                     </button>
 
@@ -2157,9 +2119,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           );
                         }
                       }}
-                      className="px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white/85 transition-colors"
+                      className="ather-depth-pill px-3.5 py-1.5 rounded-full text-[11px] font-extrabold text-white transition-colors"
                     >
-                      Following
+                      following
                     </button>
                   </div>
                 );

@@ -6,7 +6,7 @@ import {
 } from '../types/music';
 
 export const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1';
-export const AUDIUS_APP_NAME = 'MyMusicApp';
+export const AUDIUS_APP_NAME = 'Ather';
 export const LRCLIB_API_BASE = 'https://lrclib.net/api';
 
 interface AudiusRawArtwork {
@@ -54,15 +54,15 @@ function sanitizeImageUrl(url?: string | null): string | undefined {
 function normalizeCategory(
   rawGenre?: string,
   rawMood?: string,
-  override?: Exclude<CategoryPill, 'All'>
-): Exclude<CategoryPill, 'All'> {
-  if (override) return override;
+  override?: string
+): string {
+  if (override) return override.toLowerCase();
   const combined = `${rawGenre ?? ''} ${rawMood ?? ''}`.toLowerCase();
   if (combined.includes('hip') || combined.includes('rap') || combined.includes('trap')) {
-    return 'Hip Hop';
+    return 'hip hop';
   }
   if (combined.includes('blue') || combined.includes('jazz') || combined.includes('soul')) {
-    return 'Blues';
+    return 'blues';
   }
   if (
     combined.includes('sad') ||
@@ -70,9 +70,9 @@ function normalizeCategory(
     combined.includes('acoustic') ||
     combined.includes('melanchol')
   ) {
-    return 'Sad';
+    return 'sad';
   }
-  return 'Party';
+  return rawGenre?.trim().toLowerCase() || 'party';
 }
 
 export function getAudiusStreamUrl(trackId: string): string {
@@ -83,7 +83,7 @@ export function getAudiusStreamUrl(trackId: string): string {
 
 export function mapAudiusTrack(
   raw: AudiusRawTrack,
-  categoryOverride?: Exclude<CategoryPill, 'All'>
+  categoryOverride?: CategoryPill
 ): ShowcaseTrack | null {
   if (!raw || raw.id === undefined || raw.id === null) return null;
   const id = `audius-${String(raw.id)}`;
@@ -113,7 +113,7 @@ export function mapAudiusTrack(
     audiusId: rawId,
     title,
     artist,
-    album: raw.genre?.trim() || 'Audius',
+    album: raw.genre?.trim() || 'audius',
     duration,
     durationMs: duration * 1000,
     fullDuration: duration,
@@ -150,7 +150,7 @@ export async function fetchAudiusTrending(limit = 20): Promise<ShowcaseTrack[]> 
 export async function searchAudiusTracks(
   query: string,
   limit = 25,
-  categoryOverride?: Exclude<CategoryPill, 'All'>
+  categoryOverride?: CategoryPill
 ): Promise<ShowcaseTrack[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -202,7 +202,8 @@ export async function resolveFullAudiusTrack(
     return track;
   }
 
-  const cleanTitle = track.title.replace(/\s*[\[(][^)\]]*[\])]\s*/g, ' ').trim() || track.title;
+  const cleanTitle =
+    track.title.replace(/\s*[\[(][^)\]]*[\])]\s*/g, ' ').trim() || track.title;
   const query = `${cleanTitle} ${track.artist}`.trim();
 
   try {
@@ -325,7 +326,6 @@ export async function fetchTrackLyrics(
     throw new Error(`Lyrics lookup failed (${response.status})`);
   }
 
-  // Secondary exact search on LRCLIB if /get returned 404
   const searchUrl = `${LRCLIB_API_BASE}/search?track_name=${encodeURIComponent(
     cleanTitle
   )}&artist_name=${encodeURIComponent(cleanArtist)}`;
